@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Лаборатория 10: дисбаланс классов</title>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--card:#f4f4f6;--bd:#d8d8de;--mj:#6f8196;--mn:#e8841a;--g:#12915f;--r:#d6336c;--A:#2b7de9;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--mj:#8ea3ba;--mn:#f0a04b;--g:#3fcf94;--r:#f06595;--A:#5b9cf5}}
+:root[data-theme="dark"]{--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--mj:#8ea3ba;--mn:#f0a04b;--g:#3fcf94;--r:#f06595;--A:#5b9cf5}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.05rem;margin:1.2em 0 .4em}
+p{margin:.4em 0}.mut{color:var(--mut);font-size:.92rem}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media(max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+canvas{width:100%;display:block;border:1px solid var(--bd);border-radius:10px;background:var(--bg)}
+#pl{aspect-ratio:1/1}#br{aspect-ratio:1.9/1}
+button{font:inherit;padding:7px 10px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);cursor:pointer}
+button.on{border-color:var(--fg);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;align-items:center}
+label{display:block;font-size:.92rem;margin-top:8px}input[type=range]{width:100%}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.88rem}
+td,th{padding:5px 6px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap}
+.cm td{text-align:center;border:1px solid var(--bd);font-weight:600}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+ol{padding-left:1.2em;margin:.3em 0}li{margin:.3em 0}
+.grid>*,.two>*,.three>*,.g3>*{min-width:0}
+.card{max-width:100%}
+</style></head><body><main>
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab09_hyperparams.html" style="color:var(--fg)">← 9. Подбор гиперпараметров</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab11_distance.html" style="color:var(--fg)">11. Расстояния, сходство, центроид →</a></nav>
+<h1>Лаборатория 10. Классификация при дисбалансе классов</h1>
+<p class="mut">Задача: находить жалобы среди отзывов. Обычных отзывов много (серые точки), жалоб мало (оранжевые), и найти надо именно жалобы. По осям частоты слов «ужасно» и «возврат». Четыре модели логистической регрессии учатся на одних данных, но по-разному обрабатывают дисбаланс, а оцениваются на отдельной тестовой выборке с тем же соотношением классов.</p>
+<div class="grid">
+<div>
+<canvas id="pl"></canvas>
+<div class="row" id="sb"></div>
+<p class="mut"><span class="dot" style="background:var(--mj)"></span>обычный отзыв &nbsp;<span class="dot" style="background:var(--mn)"></span>жалоба. Линии это границы моделей, выбранная толще. Справа от линии модель говорит «жалоба».</p>
+</div>
+<div>
+<div class="card">
+<label>Доля жалоб в данных: <b id="shv"></b><input id="sh" type="range" min="2" max="50" value="10"></label>
+<label>Порог решения «жалоба»: <b id="thv"></b><input id="th" type="range" min="5" max="95" value="50"></label>
+<div class="row"><button id="nw">Новые данные</button></div>
+</div>
+<div class="card"><b>Метрики на тесте</b> <span class="mut">(для класса «жалоба»)</span><div class="tw"><table id="tb"></table></div></div>
+<div class="card"><b>Матрица ошибок выбранной модели</b><div class="tw" style="overflow-x:auto"><table class="cm" id="cm"></table></div></div>
+</div></div>
+<div class="card"><b>Сравнение метрик</b><canvas id="br"></canvas>
+<p class="mut"><span class="dot" style="background:var(--mut)"></span>accuracy &nbsp;<span class="dot" style="background:var(--A)"></span>precision &nbsp;<span class="dot" style="background:var(--r)"></span>recall &nbsp;<span class="dot" style="background:var(--g)"></span>F1</p></div>
+
+<h2>Что происходит</h2>
+<p>Когда жалоб 5%, модель, которая всегда отвечает «обычный отзыв», получает accuracy 95%, но не находит ни одной жалобы. Это парадокс точности: общая accuracy скрывает провал на редком классе. Поэтому смотрят на <b>precision</b> (какая доля найденных жалоб настоящая), <b>recall</b> (какую долю настоящих жалоб мы нашли) и <b>F1</b> (их баланс).</p>
+<p>Без обработки обучение минимизирует общую ошибку, поэтому граница уходит от большинства к меньшинству: жалобы «жертвуются». Способы исправить: <b>веса классов</b> (ошибка на жалобе стоит дороже), <b>SMOTE</b> (создаём синтетические жалобы между настоящими; они показаны пустыми кружками) и <b>undersampling</b> (выкидываем часть обычных отзывов; они бледнеют). Ещё один рычаг это <b>порог</b> решения: сдвигая его, мы обмениваем precision на recall.</p>
+
+<h2>Эксперименты</h2>
+<ol>
+<li>Поставьте долю жалоб 5% и посмотрите на «Без обработки»: чему равны accuracy и recall?</li>
+<li>Включите по очереди остальные модели. Как меняются граница, recall и precision?</li>
+<li>Поставьте порог 20%, затем 80%. Что происходит с precision и recall у «Без обработки»?</li>
+<li>Постепенно поднимите долю жалоб до 50%. Исчезает ли разница между методами?</li>
+<li>Сравните веса классов и SMOTE. Чем отличаются границы и метрики?</li>
+</ol>
+<h2>Вопросы для самопроверки</h2>
+<ol>
+<li>Почему accuracy плохая метрика для редких классов и какая метрика подходит, если важнее не пропустить жалобу?</li>
+<li>Чем опасен undersampling, если данных и так мало?</li>
+<li>Почему ресэмплинг нужно делать только на обучающей выборке и не трогать тестовую?</li>
+</ol>
+
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab09_hyperparams.html" style="color:var(--fg)">← 9. Подбор гиперпараметров</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab11_distance.html" style="color:var(--fg)">11. Расстояния, сходство, центроид →</a></nav>
+<script>
+const $=id=>document.getElementById(id);
+const pl=$('pl'),px=pl.getContext('2d'),br=$('br'),bx=br.getContext('2d');
+const NM=['Без обработки','Веса классов','SMOTE','Undersampling'],NC=['--fg','--g','--r','--A'],NT=1000,N=300;
+let seed=21,share=.1,thr=.5,sel=0,pM,pm,tM,tm,tr=[],te=[],M=[],syn=[],kept=null,W=400,r0=1;
+const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
+const gs=()=>Math.sqrt(-2*Math.log(rnd()+1e-9))*Math.cos(2*Math.PI*rnd());
+const cl=v=>Math.max(.02,Math.min(.98,v));
+const col=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const rs=()=>{r0=(r0*16807)%2147483647;return r0/2147483647};
+const pool=(n,cx,cy,s,c)=>Array.from({length:n},()=>({x:cl(cx+s*gs()),y:cl(cy+s*gs()),c}));
+function newPools(){pM=pool(N,.38,.42,.16,0);pm=pool(150,.66,.62,.09,1);tM=pool(NT,.38,.42,.16,0);tm=pool(500,.66,.62,.09,1)}
+function fit(P,Wt){let w1=0,w2=0,b=0;const sw=Wt.reduce((a,v)=>a+v,0);
+ for(let it=0;it<500;it++){let g1=0,g2=0,gb=0;
+  for(let i=0;i<P.length;i++){const u=(P[i].x-.5)*4,v=(P[i].y-.5)*4,e=(1/(1+Math.exp(-(w1*u+w2*v+b)))-P[i].c)*Wt[i];g1+=e*u;g2+=e*v;gb+=e}
+  w1-=1.5*(g1/sw+.001*w1);w2-=1.5*(g2/sw+.001*w2);b-=1.5*gb/sw}
+ return{w1,w2,b}}
+function build(){r0=12345;const nMin=Math.max(6,Math.round(N*share)),nMaj=N-nMin,maj=pM.slice(0,nMaj),mn=pm.slice(0,nMin);
+ tr=[...maj,...mn];const tMin=Math.round(NT*share);te=[...tM.slice(0,NT-tMin),...tm.slice(0,tMin)];
+ M=[];M[0]=fit(tr,tr.map(()=>1));
+ M[1]=fit(tr,tr.map(p=>p.c?N/(2*nMin):N/(2*nMaj)));
+ syn=[];for(let i=0;i<nMaj-nMin;i++){const a=mn[Math.floor(rs()*nMin)],o=mn.filter(q=>q!=a).sort((u,v)=>Math.hypot(u.x-a.x,u.y-a.y)-Math.hypot(v.x-a.x,v.y-a.y)).slice(0,3),b=o.length?o[Math.floor(rs()*o.length)]:a,t=rs();
+  syn.push({x:a.x+t*(b.x-a.x),y:a.y+t*(b.y-a.y),c:1})}
+ const ps=[...tr,...syn];M[2]=fit(ps,ps.map(()=>1));
+ const idx=maj.map((_,i)=>i);for(let i=idx.length-1;i>0;i--){const j=Math.floor(rs()*(i+1));[idx[i],idx[j]]=[idx[j],idx[i]]}
+ kept=new Set(idx.slice(0,nMin));const pu=[...maj.filter((_,i)=>kept.has(i)),...mn];M[3]=fit(pu,pu.map(()=>1));M.maj=maj}
+function metrics(m){let tp=0,fp=0,fn=0,tn=0;te.forEach(p=>{const z=m.w1*(p.x-.5)*4+m.w2*(p.y-.5)*4+m.b,pr=1/(1+Math.exp(-z))>=thr?1:0;
+  if(pr&&p.c)tp++;else if(pr)fp++;else if(p.c)fn++;else tn++});
+ const ac=(tp+tn)/te.length,pc=tp+fp?tp/(tp+fp):0,rc=tp+fn?tp/(tp+fn):0,f1=pc+rc?2*pc*rc/(pc+rc):0;return{tp,fp,fn,tn,ac,pc,rc,f1}}
+function line(m,c){const L=Math.log(thr/(1-thr)),a=4*m.w1,b=4*m.w2,d=m.b-2*m.w1-2*m.w2-L,n2=a*a+b*b;if(n2<1e-9)return;
+ const k=-d/n2,p0=[k*a,k*b],nn=Math.sqrt(n2),u=[-b/nn,a/nn],X=v=>v*W,Y=v=>(1-v)*W;
+ px.beginPath();px.moveTo(X(p0[0]-4*u[0]),Y(p0[1]-4*u[1]));px.lineTo(X(p0[0]+4*u[0]),Y(p0[1]+4*u[1]));px.stroke()}
+function drawPl(){const c=px;c.clearRect(0,0,W,W);const dot=(p,r,f)=>{c.beginPath();c.arc(p.x*W,(1-p.y)*W,r,0,7);if(f){c.fill()}else c.stroke()};
+ M.maj.forEach((p,i)=>{c.globalAlpha=sel==3&&!kept.has(i)?.2:.85;c.fillStyle=col('--mj');dot(p,3.6,1)});c.globalAlpha=1;
+ tr.filter(p=>p.c).forEach(p=>{c.fillStyle=col('--mn');c.strokeStyle=col('--bg');c.lineWidth=1;c.beginPath();c.arc(p.x*W,(1-p.y)*W,5,0,7);c.fill();c.stroke()});
+ if(sel==2){c.strokeStyle=col('--mn');c.lineWidth=1.4;syn.forEach(p=>dot(p,4,0))}
+ NM.forEach((_,i)=>{c.strokeStyle=col(NC[i]);c.lineWidth=i==sel?3.5:1.5;c.globalAlpha=i==sel?1:.6;line(M[i])});c.globalAlpha=1;
+ c.fillStyle=col('--mut');c.font='12px system-ui';c.fillText('«ужасно» →',W-72,W-6);c.fillText('↑ «возврат»',6,14)}
+function drawTable(){const R=M.map(metrics),f=v=>(v*100).toFixed(0)+'%';
+ let h='<tr><th>Модель</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th></tr>';
+ R.forEach((r,i)=>h+=`<tr><td><span class="dot" style="background:${col(NC[i])}"></span>${NM[i]}</td><td>${f(r.ac)}</td><td>${f(r.pc)}</td><td>${f(r.rc)}</td><td>${f(r.f1)}</td></tr>`);
+ h+=`<tr><td class="mut">Всегда «обычный»</td><td>${f(1-te.filter(p=>p.c).length/te.length)}</td><td>—</td><td>0%</td><td>0%</td></tr>`;$('tb').innerHTML=h;
+ const s=R[sel];$('cm').innerHTML=`<tr><td></td><td>Предсказано: обычный</td><td>Предсказано: жалоба</td></tr><tr><td>Факт: обычный</td><td>${s.tn}</td><td>${s.fp}</td></tr><tr><td>Факт: жалоба</td><td>${s.fn}</td><td>${s.tp}</td></tr>`;
+ const w=br.clientWidth,hh=w/1.9,c=bx;c.clearRect(0,0,w,hh);c.strokeStyle=col('--bd');c.strokeRect(.5,.5,w-1,hh-1);
+ const cs=['--mut','--A','--r','--g'],ks=['ac','pc','rc','f1'],gw=w/4;c.font='11px system-ui';
+ R.forEach((r,i)=>{ks.forEach((k,j)=>{const bw=gw/6,x=i*gw+gw*.12+j*bw*1.1,v=r[k],y=hh-22-v*(hh-34);c.fillStyle=col(cs[j]);c.fillRect(x,y,bw,hh-22-y);c.fillStyle=col('--fg');c.fillText((v*100).toFixed(0),x,y-3)});
+  c.fillStyle=col('--mut');c.fillText(NM[i],i*gw+gw*.12,hh-6)})}
+function draw(){$('shv').textContent=Math.round(share*100)+'%';$('thv').textContent=thr.toFixed(2);drawPl();drawTable();
+ document.querySelectorAll('#sb button').forEach((b,i)=>b.classList.toggle('on',i==sel))}
+function fitC(){const d=devicePixelRatio||1;W=pl.clientWidth;[[pl,px],[br,bx]].forEach(([c,x])=>{c.width=c.clientWidth*d;c.height=c.clientHeight*d;x.setTransform(d,0,0,d,0,0)});draw()}
+NM.forEach((n,i)=>{const b=document.createElement('button');b.textContent=n;b.onclick=()=>{sel=i;draw()};$('sb').appendChild(b)});
+$('sh').oninput=e=>{share=e.target.value/100;build();draw()};$('th').oninput=e=>{thr=e.target.value/100;draw()};
+$('nw').onclick=()=>{seed=Math.floor(Math.random()*1e6)+1;newPools();build();draw()};
+addEventListener('resize',fitC);newPools();build();fitC();
+</script></main></body></html>

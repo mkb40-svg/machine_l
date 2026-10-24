@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Лаборатория 5: градиентный спуск</title>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--card:#f4f4f6;--bd:#d8d8de;--A:#2b7de9;--B:#e8841a;--g:#12915f;--s:#d6336c;--m:#8e44ad;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--A:#5b9cf5;--B:#f0a04b;--g:#3fcf94;--s:#f06595;--m:#b67ad6}}
+:root[data-theme="dark"]{--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--A:#5b9cf5;--B:#f0a04b;--g:#3fcf94;--s:#f06595;--m:#b67ad6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.05rem;margin:1.2em 0 .4em}
+p{margin:.4em 0}.mut{color:var(--mut);font-size:.92rem}
+.grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px}
+@media(max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+canvas{width:100%;display:block;border:1px solid var(--bd);border-radius:10px;background:var(--bg)}
+#ls{aspect-ratio:1/1;cursor:crosshair}#lc{aspect-ratio:2/1}#ds{aspect-ratio:2/1}
+button{font:inherit;padding:7px 12px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);cursor:pointer}
+button.on{border-color:var(--fg);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;align-items:center}
+label{display:block;font-size:.92rem;margin-top:8px}input[type=range]{width:100%}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.88rem}
+td,th{padding:5px 6px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+ol{padding-left:1.2em;margin:.3em 0}li{margin:.3em 0}
+.grid>*,.two>*,.three>*,.g3>*{min-width:0}
+.card{max-width:100%}
+</style></head><body><main>
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab04_linear.html" style="color:var(--fg)">← 4. Линейные модели и границы</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab06_knn.html" style="color:var(--fg)">6. Метод k ближайших соседей →</a></nav>
+<h1>Лаборатория 5. Градиентный спуск и функция потерь</h1>
+<p class="mut">Слева «ландшафт» ошибки: каждая точка это пара весов (w₁ для слова «матч», w₂ для слова «закон»), цвет показывает величину потерь. Тёмные зоны это малые потери. Модель стартует в случайной точке и спускается вниз по градиенту. Нажмите на ландшафт, чтобы выбрать другую стартовую точку.</p>
+<div class="grid">
+<div><canvas id="ls"></canvas>
+<p class="mut"><span class="dot" style="background:var(--g)"></span>GD (весь набор) &nbsp;<span class="dot" style="background:var(--s)"></span>SGD (мини-батч 4) &nbsp;<span class="dot" style="background:var(--m)"></span>Momentum</p></div>
+<div>
+<div class="card"><b>Потери по шагам</b><canvas id="lc"></canvas></div>
+<div class="card"><b>Что видит классификатор</b> <span class="mut">(граница при текущих весах)</span><canvas id="ds"></canvas></div>
+</div></div>
+<div class="card">
+<div class="row"><button id="play">▶ Play</button><button id="stp">Шаг</button><button id="rst">Сбросить</button>
+<span class="mut">Функция потерь:</span><button id="fl" class="on">Log-loss</button><button id="fh">Hinge</button></div>
+<label>Скорость обучения η: <b id="lrv"></b><input id="lr" type="range" min="0" max="100" value="55"></label>
+<label>Скорость анимации: <input id="sp" type="range" min="1" max="12" value="4"></label>
+<div class="tw"><table id="tb"></table></div>
+</div>
+
+<h2>Что происходит</h2>
+<p>На каждом шаге вес сдвигается против градиента: w ← w − η·∇L(w). Градиент указывает, куда потери растут быстрее всего, поэтому идти надо в обратную сторону. Параметр η задаёт длину шага.</p>
+<p><b>GD</b> считает градиент по всем документам, поэтому идёт ровно, но на больших корпусах каждый шаг дорог. <b>SGD</b> берёт по 4 случайных документа: шаги дешёвые, но путь дрожит. <b>Momentum</b> копит «скорость» из прошлых шагов и поэтому разгоняется в одном направлении, но может проскочить минимум. К потерям добавлен штраф за большие веса (L2), поэтому минимум существует и в нём веса конечны.</p>
+
+<h2>Эксперименты</h2>
+<ol>
+<li>Нажмите Play при средней η. Какой путь самый ровный, какой самый быстрый?</li>
+<li>Уменьшите η почти до минимума. Что происходит со скоростью сходимости?</li>
+<li>Увеличьте η до максимума. Видите, как шаги начинают перепрыгивать минимум? Что при этом с кривой потерь?</li>
+<li>Переключитесь на Hinge. Чем отличается форма ландшафта и почему пути стали другими?</li>
+<li>Кликните в другую область ландшафта. Приходят ли все три метода в одну и ту же точку?</li>
+</ol>
+<h2>Вопросы для самопроверки</h2>
+<ol>
+<li>Почему при слишком большой η потери могут расти, хотя мы двигаемся «вниз»?</li>
+<li>Зачем SGD использует лишь часть документов и чем за это платит?</li>
+<li>Как связано положение точки на ландшафте с наклоном разделяющей прямой справа?</li>
+</ol>
+
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab04_linear.html" style="color:var(--fg)">← 4. Линейные модели и границы</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab06_knn.html" style="color:var(--fg)">6. Метод k ближайших соседей →</a></nav>
+<script>
+const $=id=>document.getElementById(id);
+const ls=$('ls'),lc=$('lc'),ds=$('ds'),cL=ls.getContext('2d'),cC=lc.getContext('2d'),cD=ds.getContext('2d');
+const R=8,N=64,LAM=0.03,DARK=matchMedia('(prefers-color-scheme:dark)').matches;
+let seed=11;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
+const gs=()=>Math.sqrt(-2*Math.log(rnd()+1e-9))*Math.cos(2*Math.PI*rnd());
+const cl=v=>Math.max(-.97,Math.min(.97,v));
+const pts=[];for(let i=0;i<20;i++){pts.push({x:cl(.4+.35*gs()),y:cl(-.35+.35*gs()),c:1});pts.push({x:cl(-.4+.35*gs()),y:cl(.35+.35*gs()),c:-1})}
+let loss='log',start=[-5,5],playing=false,fr=0,hist=[],opts,bg=null;
+const col=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const O=[{n:'GD',c:'--g'},{n:'SGD',c:'--s'},{n:'Momentum',c:'--m'}];
+const lrv=()=>Math.pow(10,-2+3.3*$('lr').value/100);
+function L(w){let t=0;for(const p of pts){const ys=p.c*(w[0]*p.x+w[1]*p.y);t+=loss=='log'?Math.log(1+Math.exp(-ys)):Math.max(0,1-ys)}return t/pts.length+LAM/2*(w[0]*w[0]+w[1]*w[1])}
+function grad(w,idx){let g=[LAM*w[0],LAM*w[1]];const k=idx.length;
+ for(const i of idx){const p=pts[i],ys=p.c*(w[0]*p.x+w[1]*p.y);
+  const f=loss=='log'?-p.c/(1+Math.exp(ys)):(ys<1?-p.c:0);g[0]+=f*p.x/k;g[1]+=f*p.y/k}return g}
+function reset(){opts=O.map(()=>({w:[...start],v:[0,0],path:[[...start]]}));hist=O.map(()=>[L(start)]);bg=null}
+function step(){const eta=lrv(),all=pts.map((_,i)=>i);
+ opts.forEach((o,k)=>{let idx=all;if(k==1){idx=[];for(let j=0;j<4;j++)idx.push(Math.floor(Math.random()*pts.length))}
+  const g=grad(o.w,idx);
+  if(k==2){o.v=[.9*o.v[0]+g[0],.9*o.v[1]+g[1]];o.w=[o.w[0]-eta*o.v[0],o.w[1]-eta*o.v[1]]}
+  else o.w=[o.w[0]-eta*g[0],o.w[1]-eta*g[1]];
+  o.w=o.w.map(v=>Math.max(-40,Math.min(40,v)));
+  o.path.push([...o.w]);hist[k].push(L(o.w))})}
+function makeBg(){const g=[];let mn=1e9,mx=-1e9;
+ for(let j=0;j<N;j++)for(let i=0;i<N;i++){const v=L([(i+.5)/N*2*R-R,R-(j+.5)/N*2*R]);g.push(v);mn=Math.min(mn,v);mx=Math.max(mx,v)}
+ bg=document.createElement('canvas');bg.width=bg.height=N;const x=bg.getContext('2d'),im=x.createImageData(N,N);
+ g.forEach((v,i)=>{const t=Math.pow((v-mn)/(mx-mn+1e-9),.45),b=Math.floor(t*12)/12;
+  const l=DARK?18+b*45:30+b*62,h=215-b*40;const c=hsl(h,55,DARK?l:100-(l-30)+30);
+  im.data.set(c,i*4)});x.putImageData(im,0,0)}
+function hsl(h,s,l){s/=100;l/=100;const a=s*Math.min(l,1-l),f=n=>{const k=(n+h/30)%12;return l-a*Math.max(-1,Math.min(k-3,9-k,1))};return[f(0)*255,f(8)*255,f(4)*255,255]}
+function drawLS(){const W=ls.clientWidth;if(!bg)makeBg();cL.imageSmoothingEnabled=false;cL.clearRect(0,0,W,W);cL.drawImage(bg,0,0,W,W);
+ const X=w=>(w+R)/(2*R)*W,Y=w=>(1-(w+R)/(2*R))*W;
+ cL.strokeStyle=col('--mut');cL.globalAlpha=.4;cL.beginPath();cL.moveTo(X(0),0);cL.lineTo(X(0),W);cL.moveTo(0,Y(0));cL.lineTo(W,Y(0));cL.stroke();cL.globalAlpha=1;
+ cL.fillStyle=col('--fg');cL.font='12px system-ui';cL.fillText('w₁ →',W-34,Y(0)-5);cL.fillText('↑ w₂',X(0)+5,13);
+ cL.beginPath();cL.arc(X(start[0]),Y(start[1]),6,0,7);cL.strokeStyle=col('--fg');cL.lineWidth=2;cL.stroke();
+ opts.forEach((o,k)=>{cL.beginPath();cL.strokeStyle=col(O[k].c);cL.lineWidth=2;
+  o.path.forEach((p,i)=>i?cL.lineTo(X(p[0]),Y(p[1])):cL.moveTo(X(p[0]),Y(p[1])));cL.stroke();
+  cL.beginPath();cL.arc(X(o.w[0]),Y(o.w[1]),5,0,7);cL.fillStyle=col(O[k].c);cL.fill()})}
+function drawLC(){const W=lc.clientWidth,H=W/2,n=Math.max(60,hist[0].length);cC.clearRect(0,0,W,H);
+ const ym=Math.max(...hist.map(h=>h[0]))*1.1;
+ cC.strokeStyle=col('--bd');cC.strokeRect(.5,.5,W-1,H-1);cC.fillStyle=col('--mut');cC.font='11px system-ui';cC.fillText('потери',4,12);cC.fillText('шаги →',W-48,H-4);
+ hist.forEach((h,k)=>{cC.beginPath();cC.strokeStyle=col(O[k].c);cC.lineWidth=2;
+  h.forEach((v,i)=>{const y=H-Math.min(1,v/ym)*(H-6)-3,x=i/n*W;i?cC.lineTo(x,y):cC.moveTo(x,y)});cC.stroke()})}
+function drawDS(){const W=ds.clientWidth,H=W/2,s=H/2;cD.clearRect(0,0,W,H);const cx=W/2,cy=H/2;
+ cD.strokeStyle=col('--bd');cD.beginPath();cD.moveTo(0,cy);cD.lineTo(W,cy);cD.moveTo(cx,0);cD.lineTo(cx,H);cD.stroke();
+ for(const p of pts){cD.beginPath();cD.arc(cx+p.x*s*1.9,cy-p.y*s,3.5,0,7);cD.fillStyle=col(p.c>0?'--A':'--B');cD.fill()}
+ opts.forEach((o,k)=>{const n=Math.hypot(o.w[0],o.w[1]);if(n<1e-6)return;const d=[-o.w[1]/n,o.w[0]/n];
+  cD.beginPath();cD.strokeStyle=col(O[k].c);cD.lineWidth=2;
+  cD.moveTo(cx-d[0]*W*1.9,cy+d[1]*W);cD.lineTo(cx+d[0]*W*1.9,cy-d[1]*W);cD.stroke()})}
+function table(){let h='<tr><th>Метод</th><th>Шагов</th><th>Потери</th><th>w₁</th><th>w₂</th><th>Точность</th></tr>';
+ opts.forEach((o,k)=>{let a=0;for(const p of pts)if(p.c*(o.w[0]*p.x+o.w[1]*p.y)>0)a++;
+  h+=`<tr><td><span class="dot" style="background:${col(O[k].c)}"></span>${O[k].n}</td><td>${hist[k].length-1}</td><td>${hist[k].at(-1).toFixed(3)}</td><td>${o.w[0].toFixed(2)}</td><td>${o.w[1].toFixed(2)}</td><td>${(a/pts.length*100).toFixed(0)}%</td></tr>`});
+ $('tb').innerHTML=h;$('lrv').textContent=lrv().toFixed(2)}
+function draw(){const W=ls.clientWidth,d=devicePixelRatio||1;
+ [[ls,cL,W,W],[lc,cC,W*.9,W*.45],[ds,cD,W*.9,W*.45]].forEach(([c,x])=>{const w=c.clientWidth,h=c.clientHeight;if(c.width!=w*d){c.width=w*d;c.height=h*d;x.setTransform(d,0,0,d,0,0);if(c==ls)bg=null}});
+ drawLS();drawLC();drawDS();table()}
+function tick(){if(playing&&++fr%(13-$('sp').value)==0){step();draw()}requestAnimationFrame(tick)}
+ls.addEventListener('click',e=>{const r=ls.getBoundingClientRect();
+ start=[(e.clientX-r.left)/r.width*2*R-R,R-(e.clientY-r.top)/r.height*2*R];reset();draw()});
+$('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'⏸ Пауза':'▶ Play'};
+$('stp').onclick=()=>{step();draw()};$('rst').onclick=()=>{reset();draw()};
+$('lr').oninput=draw;
+$('fl').onclick=()=>{loss='log';$('fl').classList.add('on');$('fh').classList.remove('on');reset();draw()};
+$('fh').onclick=()=>{loss='hinge';$('fh').classList.add('on');$('fl').classList.remove('on');reset();draw()};
+addEventListener('resize',draw);
+reset();draw();tick();
+</script></main></body></html>

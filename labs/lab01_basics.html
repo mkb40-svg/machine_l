@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Лаборатория 1: классификация и кластеризация</title>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--card:#f4f4f6;--bd:#d8d8de;--g:#12915f;--r:#d6336c;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--g:#3fcf94;--r:#f06595}}
+:root[data-theme="dark"]{--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--g:#3fcf94;--r:#f06595}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.1rem;margin:1.3em 0 .4em}
+p{margin:.4em 0}.mut{color:var(--mut);font-size:.92rem}
+.grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px}
+@media(max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+canvas{width:100%;aspect-ratio:1/1;display:block;border:1px solid var(--bd);border-radius:10px;background:var(--bg);cursor:crosshair}
+button{font:inherit;padding:7px 11px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);cursor:pointer}
+button.on{border-color:var(--fg);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;align-items:center}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+.q{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--bd)}
+.q .t{flex:1 1 280px}.q .f{flex:1 1 100%;font-size:.9rem;color:var(--mut)}.ok{color:var(--g)!important}.bad{color:var(--r)!important}
+ol{padding-left:1.2em;margin:.3em 0}li{margin:.3em 0}
+.grid>*,.two>*,.three>*,.g3>*{min-width:0}
+.card{max-width:100%}
+</style></head><body><main>
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><span></span><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab02_datasets.html" style="color:var(--fg)">2. Подготовка наборов данных →</a></nav>
+<h1>Лаборатория 1. Классификация и кластеризация текстов: в чём разница</h1>
+<p class="mut">Обе задачи группируют тексты, но отвечают на разные вопросы. <b>Классификация</b>: к какому из известных классов относится документ (нужны размеченные примеры). <b>Кластеризация</b>: какие группы вообще есть в коллекции (разметки нет, группы находятся сами).</p>
+
+<h2>1. Одни и те же документы, две постановки задачи</h2>
+<div class="row"><button id="mc" class="on">Классификация (с метками)</button><button id="mk">Кластеризация (без меток)</button><button id="tr">Показать настоящие темы</button></div>
+<div class="grid">
+<div><canvas id="cv"></canvas><p class="mut">Нажмите на плоскость, чтобы добавить новый документ ★.</p></div>
+<div class="card"><div id="lg"></div><p id="st"></p><p id="nw" class="mut"></p></div>
+</div>
+
+<h2>2. Классификация или кластеризация?</h2>
+<div class="card"><div id="qz"></div><p><b id="sc"></b></p></div>
+
+<h2>Что здесь главное</h2>
+<p>В классификации модель <b>обучается на примерах с ответами</b> и потом присваивает известные классы новым текстам: спам и не спам, тональность отзыва, язык, тема из заданного списка. Её качество можно проверить, сравнив ответы с правильными. В кластеризации <b>правильных ответов нет</b>: алгоритм ищет структуру по сходству документов, а смысл групп определяет человек (кластеры не имеют названий). Применения: группировка новостей и поисковой выдачи, поиск типовых жалоб, разведка корпуса перед разметкой, поиск дубликатов.</p>
+<p>Две задачи часто работают вместе: сначала кластеризация подсказывает, какие классы вообще есть, затем размечают примеры и обучают классификатор.</p>
+
+<h2>Эксперименты</h2>
+<ol>
+<li>В режиме классификации поставьте ★ между группами. Какой класс получит документ и насколько можно доверять такому решению?</li>
+<li>Перейдите в кластеризацию. Что изменилось на экране? Куда делись названия?</li>
+<li>Нажмите «Показать настоящие темы» и сравните с найденными кластерами. Всегда ли они совпадают?</li>
+</ol>
+<h2>Вопросы для самопроверки</h2>
+<ol>
+<li>Какие данные нужны для классификации, а какие для кластеризации?</li>
+<li>Почему качество классификации проверить проще, чем качество кластеризации?</li>
+<li>Приведите пример задачи из вашей области, где логично сначала кластеризовать, а потом классифицировать.</li>
+</ol>
+
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><span></span><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab02_datasets.html" style="color:var(--fg)">2. Подготовка наборов данных →</a></nav>
+<script>
+const $=id=>document.getElementById(id);
+const cv=$('cv'),cx=cv.getContext('2d');
+const CN=['Спорт','Политика','Кулинария'],CAL=['#2b7de9','#e8841a','#12915f'],KAL=['#8e44ad','#c9a000','#d6336c'],CEN=[[.22,.3],[.76,.3],[.5,.78]];
+let seed=6,pts=[],mode=0,truth=false,W=400,cl=[],kc=[],star=null;
+const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
+const gs=()=>Math.sqrt(-2*Math.log(rnd()+1e-9))*Math.cos(2*Math.PI*rnd());
+const cc=v=>Math.max(.02,Math.min(.98,v));
+const col=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+CEN.forEach((c,ci)=>{for(let i=0;i<35;i++)pts.push({x:cc(c[0]+.08*gs()),y:cc(c[1]+.08*gs()),c:ci})});
+const near=(p,c)=>{let b=0,bd=1e9;c.forEach((o,j)=>{const d=(p.x-o.x)**2+(p.y-o.y)**2;if(d<bd){bd=d;b=j}});return b};
+(function km(){let c=[0,40,80].map(i=>({x:pts[i].x,y:pts[i].y}));let a=[];for(let it=0;it<50;it++){a=pts.map(p=>near(p,c));c=c.map((o,j)=>{const m=pts.filter((_,i)=>a[i]==j);return m.length?{x:m.reduce((s,p)=>s+p.x,0)/m.length,y:m.reduce((s,p)=>s+p.y,0)/m.length}:o})}
+ kc=c;pts.forEach((p,i)=>p.k=a[i])})();
+(function cen(){cl=[0,1,2].map(j=>{const m=pts.filter(p=>p.c==j);return{x:m.reduce((s,p)=>s+p.x,0)/m.length,y:m.reduce((s,p)=>s+p.y,0)/m.length}})})();
+function draw(){W=cv.clientWidth;const c=cx,T=v=>v*W,U=v=>(1-v)*W;c.clearRect(0,0,W,W);
+ const cs=mode?kc:cl,pal=mode?KAL:CAL,g=40,s=W/g;c.globalAlpha=.12;
+ for(let j=0;j<g;j++)for(let i=0;i<g;i++){c.fillStyle=pal[near({x:(i+.5)/g,y:1-(j+.5)/g},cs)];c.fillRect(i*s,j*s,s+.5,s+.5)}c.globalAlpha=1;
+ pts.forEach(p=>{c.beginPath();c.arc(T(p.x),U(p.y),5,0,7);
+  if(mode==0||truth){c.fillStyle=CAL[p.c]}else c.fillStyle=col('--mut');c.fill();
+  if(mode==1){c.lineWidth=2.4;c.strokeStyle=KAL[p.k];c.stroke();if(truth){c.beginPath();c.arc(T(p.x),U(p.y),2,0,7);c.fillStyle=CAL[p.c];c.fill()}}else{c.strokeStyle=col('--bg');c.lineWidth=1;c.stroke()}});
+ cs.forEach((o,j)=>{c.fillStyle=pal[j];c.strokeStyle=col('--fg');c.lineWidth=2;c.fillRect(T(o.x)-7,U(o.y)-7,14,14);c.strokeRect(T(o.x)-7,U(o.y)-7,14,14)});
+ if(star){const x=T(star.x),y=U(star.y);c.beginPath();c.moveTo(x,y-11);c.lineTo(x+10,y);c.lineTo(x,y+11);c.lineTo(x-10,y);c.closePath();c.fillStyle=pal[near(star,cs)];c.fill();c.strokeStyle=col('--fg');c.lineWidth=2.5;c.stroke()}
+ $('lg').innerHTML=mode==0?CN.map((n,i)=>`<p><span class="dot" style="background:${CAL[i]}"></span><b>${n}</b>: известный класс, у каждого документа есть метка</p>`).join(''):
+  KAL.map((_,i)=>`<p><span class="dot" style="background:${KAL[i]}"></span><b>Кластер ${i+1}</b>: название неизвестно, группа найдена по сходству</p>`).join('');
+ const pur=pts.length?[0,1,2].reduce((a,j)=>{const m=[0,0,0];pts.forEach(p=>{if(p.k==j)m[p.c]++});return a+Math.max(...m)},0)/pts.length:0;
+ $('st').innerHTML=star?(mode==0?`Новый документ ★ получил класс <b>«${CN[near(star,cl)]}»</b> (по ближайшему центру класса).`:`Новый документ ★ попал в <b>кластер ${near(star,kc)+1}</b>. Что это за группа, решает человек.`):'';
+ $('nw').textContent=mode==0?'Обучение шло по меткам. Центры классов вычислены из размеченных документов.':`Метки не использовались вообще. Совпадение кластеров с настоящими темами (чистота): ${(pur*100).toFixed(0)}%.`}
+function fit(){const d=devicePixelRatio||1;cv.width=cv.clientWidth*d;cv.height=cv.clientHeight*d;cx.setTransform(d,0,0,d,0,0);draw()}
+cv.onclick=e=>{const r=cv.getBoundingClientRect();star={x:(e.clientX-r.left)/r.width,y:1-(e.clientY-r.top)/r.height};draw()};
+$('mc').onclick=()=>{mode=0;$('mc').classList.add('on');$('mk').classList.remove('on');draw()};
+$('mk').onclick=()=>{mode=1;$('mk').classList.add('on');$('mc').classList.remove('on');draw()};
+$('tr').onclick=()=>{truth=!truth;$('tr').classList.toggle('on',truth);draw()};
+const Q=[['Определить, является ли письмо спамом, по размеченным примерам',0],['Разбить 10 000 новостей на группы по темам, когда список тем заранее неизвестен',1],['Определить тональность отзыва: положительный или отрицательный',0],['Найти типовые группы жалоб клиентов, не зная заранее, какие они бывают',1],['Определить язык, на котором написан текст',0],['Сгруппировать результаты поисковой выдачи по смыслу',1],['Присвоить обращению в поддержку одну категорию из заданного списка',0],['Найти близкие по смыслу тексты и дубликаты в большом неразмеченном корпусе',1]];
+let score=0,ans=0;
+$('qz').innerHTML=Q.map((q,i)=>`<div class="q"><span class="t">${i+1}. ${q[0]}</span><button data-i="${i}" data-a="0">Классификация</button><button data-i="${i}" data-a="1">Кластеризация</button><span class="f" id="f${i}"></span></div>`).join('');
+$('qz').onclick=e=>{const b=e.target.closest('button');if(!b)return;const i=+b.dataset.i,a=+b.dataset.a,f=$('f'+i);if(f.dataset.d)return;f.dataset.d=1;ans++;const ok=a==Q[i][1];if(ok)score++;
+ f.className='f '+(ok?'ok':'bad');f.textContent=(ok?'Верно. ':'Неверно. ')+(Q[i][1]?'Готовых меток нет, группы ищутся по сходству: это кластеризация.':'Есть заранее заданные классы и размеченные примеры: это классификация.');
+ $('sc').textContent=`Результат: ${score} из ${ans} (всего ${Q.length})`};
+addEventListener('resize',fit);fit();
+</script></main></body></html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Лаборатория 14: оценка качества кластеризации</title>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--card:#f4f4f6;--bd:#d8d8de;--r:#d6336c;--A:#2b7de9;--g:#12915f;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--r:#f06595;--A:#5b9cf5;--g:#3fcf94}}
+:root[data-theme="dark"]{--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--r:#f06595;--A:#5b9cf5;--g:#3fcf94}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.05rem;margin:1.2em 0 .4em}
+p{margin:.4em 0}.mut{color:var(--mut);font-size:.92rem}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media(max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}.g3{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+canvas{width:100%;display:block;border:1px solid var(--bd);border-radius:10px;background:var(--bg)}
+#pl{aspect-ratio:1/1}#sl{aspect-ratio:1/1}.cv{aspect-ratio:1.5/1}
+button{font:inherit;padding:7px 10px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);cursor:pointer}
+button.on{border-color:var(--fg);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;align-items:center}
+label{display:block;font-size:.92rem;margin-top:8px}input[type=range]{width:100%}
+ol{padding-left:1.2em;margin:.3em 0}li{margin:.3em 0}
+.grid>*,.two>*,.three>*,.g3>*{min-width:0}
+.card{max-width:100%}
+</style></head><body><main>
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab13_hier_dbscan.html" style="color:var(--fg)">← 13. Иерархическая кластеризация и DBSCAN</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab15_lda.html" style="color:var(--fg)">15. Тематическое моделирование (LDA) →</a></nav>
+<h1>Лаборатория 14. Оценка качества кластеризации и выбор числа кластеров</h1>
+<p class="mut">Правильных ответов у кластеризации нет, поэтому качество оценивают по самой геометрии: насколько кластеры компактны и далеки друг от друга. Здесь K-Means запускается для k от 2 до 8, и три внутренние метрики подсказывают лучшее k.</p>
+<div class="row"><span class="mut">Данные:</span><button id="d0" class="on">Три чёткие группы</button><button id="d1">Четыре группы</button><button id="d2">Пересекающиеся группы</button><button id="d3">Кольца</button><button id="nw">Новые данные</button></div>
+<div class="grid">
+<div><canvas id="pl"></canvas><p class="mut">Крупные точки хорошо вписаны в свой кластер, мелкие плохо, красная обводка означает отрицательный силуэт (точка, возможно, не в том кластере).</p></div>
+<div><canvas id="sl"></canvas><p class="mut">График силуэта: каждая полоска это один документ, красная линия среднее.</p>
+<label>Число кластеров k: <b id="kv"></b><input id="k" type="range" min="2" max="8" value="3"></label></div>
+</div>
+<div class="card"><b id="sum"></b></div>
+<div class="g3">
+<div class="card"><b>Силуэт</b> <span class="mut">(больше лучше)</span><canvas class="cv" id="c0"></canvas></div>
+<div class="card"><b>Дэвис–Болдин</b> <span class="mut">(меньше лучше)</span><canvas class="cv" id="c1"></canvas></div>
+<div class="card"><b>Калински–Харабас</b> <span class="mut">(больше лучше)</span><canvas class="cv" id="c2"></canvas></div>
+</div>
+
+<h2>Что означают метрики</h2>
+<p><b>Коэффициент силуэта</b> для документа: s = (b − a) / max(a, b), где a это среднее расстояние до своего кластера, b среднее расстояние до ближайшего чужого. Значение около 1 означает «сидит прочно», около 0 «на границе», отрицательное «скорее в чужом кластере». Берётся среднее по всем документам.</p>
+<p><b>Индекс Дэвиса–Болдина</b> для каждого кластера ищет самого «похожего» соседа по отношению разброса к расстоянию между центрами и усредняет. Чем меньше, тем кластеры компактнее и дальше друг от друга. <b>Индекс Калински–Харабаса</b> это отношение межкластерного разброса к внутрикластерному (с поправкой на k): чем больше, тем лучше.</p>
+<p>Метрики подсказывают, но не решают: они любят круглые компактные группы, поэтому на кольцах могут «предлагать» бессмысленное k. Решение стоит подтверждать глазами и смыслом задачи.</p>
+
+<h2>Эксперименты</h2>
+<ol>
+<li>На «Трёх чётких группах» подвигайте k. Согласны ли все три метрики в выборе k?</li>
+<li>Посмотрите на график силуэта при k, меньшем и большем истинного. Как меняется форма полосок и где появляются отрицательные значения?</li>
+<li>На «Четырёх группах» и «Пересекающихся» сравните выбор разных метрик. Всегда ли они согласны?</li>
+<li>Выберите «Кольца». Какое k предлагают метрики и почему оно не имеет смысла для этих данных?</li>
+</ol>
+<h2>Вопросы для самопроверки</h2>
+<ol>
+<li>Почему SSE (метод локтя) сам по себе не годится для выбора k, а силуэт годится?</li>
+<li>Почему внутренние метрики плохо подходят для нешарообразных кластеров?</li>
+<li>Как можно оценить кластеризацию, если у части документов есть настоящие метки?</li>
+</ol>
+
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab13_hier_dbscan.html" style="color:var(--fg)">← 13. Иерархическая кластеризация и DBSCAN</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab15_lda.html" style="color:var(--fg)">15. Тематическое моделирование (LDA) →</a></nav>
+<script>
+const $=id=>document.getElementById(id);
+const pl=$('pl'),px=pl.getContext('2d'),sl=$('sl'),sx=sl.getContext('2d');
+const CV=[0,1,2].map(i=>$('c'+i)),CX=CV.map(c=>c.getContext('2d'));
+const PAL=['#2b7de9','#e8841a','#12915f','#d6336c','#8e44ad','#c9a000','#00a3b4','#7a5c3a'];
+let seed=2,pre=0,pts=[],D=[],res=[],sil=[],dbi=[],chi=[],ps=[],k=3,W=400;
+const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
+const gs=()=>Math.sqrt(-2*Math.log(rnd()+1e-9))*Math.cos(2*Math.PI*rnd());
+const cl=v=>Math.max(.02,Math.min(.98,v));
+const col=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function gen(){pts=[];const P=(x,y)=>pts.push({x:cl(x),y:cl(y)}),b=(n,cx,cy,s)=>{for(let i=0;i<n;i++)P(cx+s*gs(),cy+s*gs())};
+ if(pre==0){b(50,.22,.28,.055);b(50,.75,.28,.055);b(50,.5,.78,.055)}
+ else if(pre==1){b(40,.22,.25,.05);b(40,.75,.25,.05);b(40,.22,.75,.05);b(40,.75,.75,.05)}
+ else if(pre==2){b(50,.35,.4,.1);b(50,.6,.45,.1);b(50,.48,.65,.1)}
+ else{for(let i=0;i<50;i++){const t=rnd()*6.283;P(.5+.1*Math.cos(t)+.01*gs(),.5+.1*Math.sin(t)+.01*gs())}
+  for(let i=0;i<100;i++){const t=rnd()*6.283;P(.5+.35*Math.cos(t)+.01*gs(),.5+.35*Math.sin(t)+.01*gs())}}
+ analyze()}
+const d2=(a,b)=>(a.x-b.x)**2+(a.y-b.y)**2;
+function km(kk,r){let c=[pts[Math.floor(r()*pts.length)]];c=[{x:c[0].x,y:c[0].y}];
+ while(c.length<kk){const d=pts.map(p=>Math.min(...c.map(o=>d2(p,o)))),t=d.reduce((a,v)=>a+v,0);let u=r()*t,i=0;while(i<d.length-1&&u>d[i]){u-=d[i];i++}c.push({x:pts[i].x,y:pts[i].y})}
+ let a=Array(pts.length).fill(-1);for(let it=0;it<60;it++){let ch=false;pts.forEach((p,i)=>{let b=0,bd=1e9;c.forEach((o,j)=>{const v=d2(p,o);if(v<bd){bd=v;b=j}});if(b!=a[i]){a[i]=b;ch=true}});if(!ch)break;
+  const s=c.map(()=>[0,0,0]);pts.forEach((p,i)=>{const t=s[a[i]];t[0]+=p.x;t[1]+=p.y;t[2]++});c=c.map((o,j)=>s[j][2]?{x:s[j][0]/s[j][2],y:s[j][1]/s[j][2]}:o)}
+ return{lab:a,c,sse:pts.reduce((s,p,i)=>s+d2(p,c[a[i]]),0)}}
+function analyze(){const n=pts.length;D=pts.map(p=>pts.map(q=>Math.sqrt(d2(p,q))));let s2=9;const r=()=>{s2=(s2*16807)%2147483647;return s2/2147483647};
+ res=[];sil=[];dbi=[];chi=[];ps=[];const g={x:pts.reduce((s,p)=>s+p.x,0)/n,y:pts.reduce((s,p)=>s+p.y,0)/n};
+ for(let kk=2;kk<=8;kk++){let best=null;for(let t=0;t<6;t++){const o=km(kk,r);if(!best||o.sse<best.sse)best=o}res[kk]=best;
+  const{lab,c}=best,cnt=c.map((_,j)=>lab.filter(v=>v==j).length),s=pts.map((_,i)=>{const sum=Array(kk).fill(0);for(let j=0;j<n;j++)if(j!=i)sum[lab[j]]+=D[i][j];
+   if(cnt[lab[i]]<2)return 0;const a=sum[lab[i]]/(cnt[lab[i]]-1);let b=1e9;for(let j=0;j<kk;j++)if(j!=lab[i]&&cnt[j])b=Math.min(b,sum[j]/cnt[j]);return(b-a)/Math.max(a,b)});
+  ps[kk]=s;sil[kk]=s.reduce((a,v)=>a+v,0)/n;
+  const S=c.map((o,j)=>{const m=pts.filter((_,i)=>lab[i]==j);return m.length?m.reduce((a,p)=>a+Math.sqrt(d2(p,o)),0)/m.length:0});
+  let db=0;for(let i=0;i<kk;i++){let m=0;for(let j=0;j<kk;j++)if(j!=i)m=Math.max(m,(S[i]+S[j])/(Math.sqrt(d2(c[i],c[j]))+1e-9));db+=m}dbi[kk]=db/kk;
+  const B=c.reduce((a,o,j)=>a+cnt[j]*d2(o,g),0);chi[kk]=(B/(kk-1))/(best.sse/(n-kk))}}
+function drawPl(){const c=px,T=v=>v*W,U=v=>(1-v)*W,{lab}=res[k];c.clearRect(0,0,W,W);
+ pts.forEach((p,i)=>{const s=ps[k][i];c.beginPath();c.arc(T(p.x),U(p.y),3+4*Math.max(0,s),0,7);c.fillStyle=PAL[lab[i]];c.fill();c.strokeStyle=s<0?col('--r'):col('--bg');c.lineWidth=s<0?2.5:1;c.stroke()});
+ res[k].c.forEach((o,j)=>{c.fillStyle=PAL[j];c.strokeStyle=col('--fg');c.lineWidth=2;c.fillRect(T(o.x)-7,U(o.y)-7,14,14);c.strokeRect(T(o.x)-7,U(o.y)-7,14,14)})}
+function drawSl(){const w=sl.clientWidth,c=sx,{lab}=res[k],n=pts.length;c.clearRect(0,0,w,w);const X=v=>w*.08+(v+.4)/1.4*w*.86,bh=(w-16)/(n+k*3);let y=8;
+ c.strokeStyle=col('--bd');c.beginPath();c.moveTo(X(0),0);c.lineTo(X(0),w);c.stroke();
+ for(let j=0;j<k;j++){const idx=pts.map((_,i)=>i).filter(i=>lab[i]==j).sort((a,b)=>ps[k][b]-ps[k][a]);
+  idx.forEach(i=>{const v=ps[k][i];c.fillStyle=PAL[j];c.fillRect(Math.min(X(0),X(v)),y,Math.abs(X(v)-X(0)),Math.max(1,bh-.4));y+=bh});y+=bh*3}
+ c.setLineDash([6,4]);c.strokeStyle=col('--r');c.lineWidth=2;c.beginPath();c.moveTo(X(sil[k]),0);c.lineTo(X(sil[k]),w);c.stroke();c.setLineDash([]);
+ c.fillStyle=col('--fg');c.font='12px system-ui';c.fillText('средний силуэт = '+sil[k].toFixed(3),X(sil[k])+6,16)}
+function curve(i,vals,max){const c=CX[i],cv=CV[i],w=cv.clientWidth,h=cv.clientHeight;c.clearRect(0,0,w,h);const v=[];for(let kk=2;kk<=8;kk++)v.push(vals[kk]);
+ const lo=Math.min(...v),hi=Math.max(...v),X=j=>14+j/6*(w-28),Y=x=>h-16-(x-lo)/(hi-lo+1e-9)*(h-30);
+ c.strokeStyle=col('--fg');c.lineWidth=2;c.beginPath();v.forEach((x,j)=>j?c.lineTo(X(j),Y(x)):c.moveTo(X(j),Y(x)));c.stroke();
+ const bi=v.indexOf(max?hi:lo);v.forEach((x,j)=>{c.beginPath();c.arc(X(j),Y(x),j==k-2?6:3.5,0,7);c.fillStyle=j==bi?col('--g'):j==k-2?col('--r'):col('--fg');c.fill();c.fillStyle=col('--mut');c.font='11px system-ui';c.fillText(j+2,X(j)-3,h-3)});return bi+2}
+function draw(){$('kv').textContent=k;const a=curve(0,sil,1),b=curve(1,dbi,0),e=curve(2,chi,1);
+ $('sum').textContent=`Лучшее k по силуэту: ${a}; по Дэвису–Болдину: ${b}; по Калински–Харабасу: ${e}. Сейчас выбрано k = ${k} (силуэт ${sil[k].toFixed(3)}, ДБ ${dbi[k].toFixed(3)}, КХ ${chi[k].toFixed(0)}). Зелёная точка на графике это лучшее k по метрике.`;drawPl();drawSl()}
+function fit(){const d=devicePixelRatio||1;W=pl.clientWidth;[[pl,px],[sl,sx],...CV.map((c,i)=>[c,CX[i]])].forEach(([c,x])=>{c.width=c.clientWidth*d;c.height=c.clientHeight*d;x.setTransform(d,0,0,d,0,0)});draw()}
+$('k').oninput=e=>{k=+e.target.value;draw()};
+['d0','d1','d2','d3'].forEach((id,i)=>$(id).onclick=()=>{pre=i;['d0','d1','d2','d3'].forEach((d,j)=>$(d).classList.toggle('on',j==i));gen();draw()});
+$('nw').onclick=()=>{seed=Math.floor(Math.random()*1e6)+1;gen();draw()};
+addEventListener('resize',fit);gen();fit();
+</script></main></body></html>

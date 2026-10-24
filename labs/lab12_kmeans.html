@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Лаборатория 12: алгоритм K-Means</title>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--card:#f4f4f6;--bd:#d8d8de;--r:#d6336c;--A:#2b7de9;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--r:#f06595;--A:#5b9cf5}}
+:root[data-theme="dark"]{--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--r:#f06595;--A:#5b9cf5}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.05rem;margin:1.2em 0 .4em}
+p{margin:.4em 0}.mut{color:var(--mut);font-size:.92rem}
+.grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px}
+@media(max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+canvas{width:100%;display:block;border:1px solid var(--bd);border-radius:10px;background:var(--bg)}
+#pl{aspect-ratio:1/1;touch-action:none;cursor:crosshair}#sc,#el{aspect-ratio:2.2/1}
+button{font:inherit;padding:7px 10px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);cursor:pointer}
+button.on{border-color:var(--fg);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;align-items:center}
+label{display:block;font-size:.92rem;margin-top:8px}input[type=range]{width:100%}
+.bar{display:flex;align-items:center;gap:8px;font-size:.85rem;margin:2px 0}.bar i{display:block;height:11px;border-radius:4px;background:var(--mut)}.bar i.b{background:var(--A)}
+ol{padding-left:1.2em;margin:.3em 0}li{margin:.3em 0}
+.grid>*,.two>*,.three>*,.g3>*{min-width:0}
+.card{max-width:100%}
+</style></head><body><main>
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab11_distance.html" style="color:var(--fg)">← 11. Расстояния, сходство, центроид</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab13_hier_dbscan.html" style="color:var(--fg)">13. Иерархическая кластеризация и DBSCAN →</a></nav>
+<h1>Лаборатория 12. Алгоритм K-Means</h1>
+<p class="mut">Документы (точки) нужно разбить на k групп без готовых меток. K-Means повторяет два шага: каждый документ присоединяется к ближайшему центроиду, затем центроид переезжает в середину своей группы. Квадраты это центроиды, тянуть их можно мышью. Нажатие на пустое место добавляет документ.</p>
+<div class="grid">
+<div><canvas id="pl"></canvas><p class="mut" id="stt"></p>
+<div class="row"><button id="play">▶ Play</button><button id="stp">Шаг</button><button id="rs">Сначала</button><button id="ni">Новая инициализация</button></div>
+</div>
+<div>
+<div class="card">
+<label>Число кластеров k: <b id="kv"></b><input id="k" type="range" min="1" max="8" value="3"></label>
+<div class="row"><span class="mut">Начальные центроиды:</span><button id="i1">Случайные документы</button><button id="i2">Случайные точки</button><button id="i3" class="on">k-means++</button></div>
+<div class="row"><span class="mut">Данные:</span><button id="d0" class="on">Три группы</button><button id="d1">Разные размеры</button><button id="d2">Вытянутые</button><button id="d3">Кольца</button></div>
+<div class="row"><button id="rg" class="on">Показывать области</button><button id="nw">Новые данные</button></div>
+</div>
+<div class="card"><b>SSE по шагам</b> <span class="mut">(сумма квадратов расстояний до центроидов)</span><canvas id="sc"></canvas></div>
+<div class="card"><b>Метод локтя: SSE в зависимости от k</b><canvas id="el"></canvas></div>
+<div class="card"><button id="ru">Запустить 10 раз с разной инициализацией</button><div id="rr"></div></div>
+</div></div>
+
+<h2>Что происходит</h2>
+<p>Алгоритм: (1) выбрать k стартовых центроидов; (2) отнести каждый документ к ближайшему центроиду; (3) переместить каждый центроид в среднее своих документов; (4) повторять шаги 2–3, пока назначения не перестанут меняться. SSE на каждом шаге только убывает, поэтому алгоритм всегда останавливается, но может остановиться в <b>локальном минимуме</b>: результат зависит от стартовых центроидов. Метод k-means++ выбирает стартовые центроиды далеко друг от друга и обычно даёт лучший результат.</p>
+<p>Число k надо задавать заранее. График «локтя» помогает его выбрать: SSE всегда падает с ростом k, но после «правильного» k падение резко замедляется. K-Means хорошо работает на компактных округлых группах и плохо на вытянутых и кольцевых.</p>
+
+<h2>Эксперименты</h2>
+<ol>
+<li>На данных «Три группы» при k = 3 нажимайте «Шаг». Что происходит на шаге назначения и что на шаге пересчёта? Как ведёт себя SSE?</li>
+<li>Включите «Случайные точки» и несколько раз нажмите «Новая инициализация». Бывает ли, что центроид остаётся без документов или два центроида попадают в одну группу?</li>
+<li>Нажмите «Запустить 10 раз» для случайной инициализации и для k-means++. Какой метод чаще находит лучший результат?</li>
+<li>Посмотрите на график локтя. Где «изгиб»? Совпадает ли он с настоящим числом групп?</li>
+<li>Переключитесь на «Вытянутые» и «Кольца». Что получается и почему K-Means ошибается?</li>
+</ol>
+<h2>Вопросы для самопроверки</h2>
+<ol>
+<li>Почему SSE не может расти после шага пересчёта центроидов?</li>
+<li>Почему лучший SSE при k = числу документов равен нулю и почему это бесполезно?</li>
+<li>Какие свойства K-Means мешают ему найти кольца и как с этим справляются DBSCAN и иерархическая кластеризация (следующая тема)?</li>
+</ol>
+
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab11_distance.html" style="color:var(--fg)">← 11. Расстояния, сходство, центроид</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab13_hier_dbscan.html" style="color:var(--fg)">13. Иерархическая кластеризация и DBSCAN →</a></nav>
+<script>
+const $=id=>document.getElementById(id);
+const pl=$('pl'),px=pl.getContext('2d'),sc=$('sc'),sx=sc.getContext('2d'),el=$('el'),ex=el.getContext('2d');
+const PAL=['#2b7de9','#e8841a','#12915f','#d6336c','#8e44ad','#c9a000','#00a3b4','#7a5c3a'];
+let seed=5,iseed=11,pts=[],cents=[],asg=[],iter=0,phase=0,hist=[],trails=[],conv=false,k=3,im='pp',pre=0,reg=true,playing=false,fc=0,W=400,elbow=[],drag=-1,moved=false,empty=0;
+const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
+const gs=()=>Math.sqrt(-2*Math.log(rnd()+1e-9))*Math.cos(2*Math.PI*rnd());
+const rg=()=>{iseed=(iseed*16807)%2147483647;return iseed/2147483647};
+const cl=v=>Math.max(.02,Math.min(.98,v));
+const col=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function gen(){pts=[];const b=(n,cx,cy,a,c,an)=>{for(let i=0;i<n;i++){const u=a*gs(),v=c*gs();pts.push({x:cl(cx+u*Math.cos(an)-v*Math.sin(an)),y:cl(cy+u*Math.sin(an)+v*Math.cos(an))})}};
+ const ring=(n,r)=>{for(let i=0;i<n;i++){const t=rnd()*6.283;pts.push({x:cl(.5+r*Math.cos(t)+.015*gs()),y:cl(.5+r*Math.sin(t)+.015*gs())})}};
+ if(pre==0){b(50,.25,.3,.06,.06,0);b(50,.72,.3,.06,.06,0);b(50,.5,.75,.06,.06,0)}
+ else if(pre==1){b(80,.3,.5,.12,.12,0);b(25,.78,.3,.04,.04,0);b(25,.75,.8,.04,.04,0)}
+ else if(pre==2){b(70,.38,.64,.17,.035,.6);b(70,.62,.36,.17,.035,.6)}
+ else{ring(50,.12);ring(110,.35)}
+ computeElbow();restart()}
+const near=(p,c)=>{let b=0,bd=1e9;c.forEach((o,j)=>{const d=(p.x-o.x)**2+(p.y-o.y)**2;if(d<bd){bd=d;b=j}});return b};
+const sseOf=(a=asg,c=cents)=>pts.reduce((s,p,i)=>a[i]<0?s:s+(p.x-c[a[i]].x)**2+(p.y-c[a[i]].y)**2,0);
+function initC(kk,m,r){let c=[];
+ if(m=='rnd'){const ix=[];while(ix.length<Math.min(kk,pts.length)){const i=Math.floor(r()*pts.length);if(!ix.includes(i))ix.push(i)}c=ix.map(i=>({x:pts[i].x,y:pts[i].y}))}
+ else if(m=='uni'){for(let i=0;i<kk;i++)c.push({x:.05+.9*r(),y:.05+.9*r()})}
+ else{const f=pts[Math.floor(r()*pts.length)];c=[{x:f.x,y:f.y}];
+  while(c.length<kk){const d=pts.map(p=>Math.min(...c.map(o=>(p.x-o.x)**2+(p.y-o.y)**2))),t=d.reduce((a,v)=>a+v,0);let u=r()*t,i=0;while(i<d.length-1&&u>d[i]){u-=d[i];i++}c.push({x:pts[i].x,y:pts[i].y})}}
+ return c}
+function lloyd(c){let a=Array(pts.length).fill(-1);for(let it=0;it<100;it++){let ch=false;pts.forEach((p,i)=>{const j=near(p,c);if(j!=a[i]){a[i]=j;ch=true}});if(!ch)break;
+ const s=c.map(()=>[0,0,0]);pts.forEach((p,i)=>{const t=s[a[i]];t[0]+=p.x;t[1]+=p.y;t[2]++});c=c.map((o,j)=>s[j][2]?{x:s[j][0]/s[j][2],y:s[j][1]/s[j][2]}:o)}
+ return sseOf(a,c)}
+function computeElbow(){let s2=77;const r=()=>{s2=(s2*16807)%2147483647;return s2/2147483647};elbow=[];
+ for(let kk=1;kk<=8;kk++){let b=1e9;for(let t=0;t<6;t++)b=Math.min(b,lloyd(initC(kk,'pp',r)));elbow.push(b)}}
+function restart(){iseed=iseed||11;cents=initC(k,im,rg);asg=Array(pts.length).fill(-1);iter=0;phase=0;hist=[];conv=false;empty=0;trails=cents.map(c=>[{x:c.x,y:c.y}])}
+function step(){if(conv)return;
+ if(phase==0){let ch=false;pts.forEach((p,i)=>{const j=near(p,cents);if(j!=asg[i]){asg[i]=j;ch=true}});hist.push(sseOf());if(!ch&&iter>0)conv=true;phase=1}
+ else{const s=cents.map(()=>[0,0,0]);pts.forEach((p,i)=>{const t=s[asg[i]];t[0]+=p.x;t[1]+=p.y;t[2]++});empty=0;
+  cents=cents.map((o,j)=>{if(!s[j][2]){empty++;return o}return{x:s[j][0]/s[j][2],y:s[j][1]/s[j][2]}});cents.forEach((c,j)=>trails[j].push({x:c.x,y:c.y}));hist.push(sseOf());phase=0;iter++}}
+function drawPl(){const c=px,T=v=>v*W,U=v=>(1-v)*W;c.clearRect(0,0,W,W);
+ if(reg&&asg[0]>=0||reg&&iter==0){const g=40,s=W/g;c.globalAlpha=.13;for(let j=0;j<g;j++)for(let i=0;i<g;i++){c.fillStyle=PAL[near({x:(i+.5)/g,y:1-(j+.5)/g},cents)];c.fillRect(i*s,j*s,s+.5,s+.5)}c.globalAlpha=1}
+ trails.forEach((t,j)=>{c.beginPath();c.strokeStyle=PAL[j];c.lineWidth=1.8;c.globalAlpha=.7;t.forEach((p,i)=>i?c.lineTo(T(p.x),U(p.y)):c.moveTo(T(p.x),U(p.y)));c.stroke();c.globalAlpha=1;
+  t.slice(0,-1).forEach(p=>{c.beginPath();c.arc(T(p.x),U(p.y),3,0,7);c.fillStyle=PAL[j];c.fill()})});
+ pts.forEach((p,i)=>{c.beginPath();c.arc(T(p.x),U(p.y),4.2,0,7);c.fillStyle=asg[i]>=0?PAL[asg[i]]:col('--mut');c.fill();c.strokeStyle=col('--bg');c.lineWidth=1;c.stroke()});
+ cents.forEach((o,j)=>{c.fillStyle=PAL[j];c.strokeStyle=col('--fg');c.lineWidth=2.5;c.fillRect(T(o.x)-9,U(o.y)-9,18,18);c.strokeRect(T(o.x)-9,U(o.y)-9,18,18)});
+ const sse=hist.length?hist[hist.length-1]:sseOf(pts.map((p)=>near(p,cents)));
+ $('stt').innerHTML=conv?`<b>Алгоритм сошёлся</b> за ${iter} итераций. SSE = ${sse.toFixed(3)}.`:`Итерация ${iter}. Следующий шаг: ${phase?'пересчёт центроидов':'назначение документов ближайшему центроиду'}.`+(hist.length?` SSE = ${sse.toFixed(3)}.`:'')+(empty?` Пустых кластеров: ${empty}.`:'')}
+function line(ctx,w,h,ys,xs,color,lw){ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=lw;ys.forEach((v,i)=>i?ctx.lineTo(xs(i),v):ctx.moveTo(xs(i),v));ctx.stroke()}
+function drawSc(){const w=sc.clientWidth,h=w/2.2,c=sx;c.clearRect(0,0,w,h);c.strokeStyle=col('--bd');c.strokeRect(.5,.5,w-1,h-1);
+ if(!hist.length){c.fillStyle=col('--mut');c.font='12px system-ui';c.fillText('сделайте первый шаг',10,h/2);return}
+ const mx=Math.max(...hist)*1.05,n=Math.max(8,hist.length);const xs=i=>12+i/(n-1)*(w-24),ys=hist.map(v=>h-8-v/mx*(h-18));
+ line(c,w,h,ys,xs,col('--r'),2.2);hist.forEach((v,i)=>{c.beginPath();c.arc(xs(i),ys[i],3.2,0,7);c.fillStyle=i%2?col('--A'):col('--r');c.fill()});
+ c.fillStyle=col('--mut');c.font='11px system-ui';c.fillText('красные точки: после назначения, синие: после пересчёта',8,12)}
+function drawEl(){const w=el.clientWidth,h=w/2.2,c=ex;c.clearRect(0,0,w,h);c.strokeStyle=col('--bd');c.strokeRect(.5,.5,w-1,h-1);
+ const mx=Math.max(...elbow)*1.05,xs=i=>24+i/7*(w-44),ys=elbow.map(v=>h-18-v/mx*(h-28));
+ line(c,w,h,ys,xs,col('--fg'),2);c.fillStyle=col('--mut');c.font='11px system-ui';
+ elbow.forEach((v,i)=>{c.beginPath();c.arc(xs(i),ys[i],i==k-1?6:3.5,0,7);c.fillStyle=i==k-1?col('--r'):col('--fg');c.fill();c.fillStyle=col('--mut');c.fillText(i+1,xs(i)-3,h-4)})}
+function draw(){$('kv').textContent=k;drawPl();drawSc();drawEl()}
+function fit(){const d=devicePixelRatio||1;W=pl.clientWidth;[[pl,px],[sc,sx],[el,ex]].forEach(([c,x])=>{c.width=c.clientWidth*d;c.height=c.clientHeight*d;x.setTransform(d,0,0,d,0,0)});draw()}
+function ptr(e){const r=pl.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width,y:1-(e.clientY-r.top)/r.height}}
+pl.onpointerdown=e=>{const p=ptr(e);drag=-1;moved=false;cents.forEach((o,j)=>{if(Math.hypot(o.x-p.x,o.y-p.y)*W<16)drag=j});if(drag>=0)pl.setPointerCapture(e.pointerId)};
+pl.onpointermove=e=>{if(drag<0)return;const p=ptr(e);cents[drag]={x:cl(p.x),y:cl(p.y)};trails[drag]=[{...cents[drag]}];moved=true;asg=asg.map(()=>-1);hist=[];iter=0;phase=0;conv=false;draw()};
+pl.onpointerup=e=>{if(drag<0){const p=ptr(e);pts.push({x:cl(p.x),y:cl(p.y)});asg.push(-1);computeElbow();restart();draw()}drag=-1};
+function tog(ids,i){ids.forEach((d,j)=>$(d).classList.toggle('on',j==i))}
+$('k').oninput=e=>{k=+e.target.value;restart();draw()};
+['i1','i2','i3'].forEach((id,i)=>$(id).onclick=()=>{im=['rnd','uni','pp'][i];tog(['i1','i2','i3'],i);restart();draw()});
+['d0','d1','d2','d3'].forEach((id,i)=>$(id).onclick=()=>{pre=i;tog(['d0','d1','d2','d3'],i);gen();draw()});
+$('rg').onclick=()=>{reg=!reg;$('rg').classList.toggle('on',reg);draw()};
+$('nw').onclick=()=>{seed=Math.floor(Math.random()*1e6)+1;gen();draw()};
+$('rs').onclick=()=>{iseed=11;restart();draw()};$('ni').onclick=()=>{iseed=Math.floor(Math.random()*1e6)+1;restart();draw()};
+$('stp').onclick=()=>{step();draw()};
+$('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'⏸ Пауза':'▶ Play'};
+$('ru').onclick=()=>{const r=[];for(let i=0;i<10;i++)r.push(lloyd(initC(k,im,rg)));r.sort((a,b)=>a-b);const mn=r[0],mx=r[9],ok=r.filter(v=>v<mn*1.01).length;
+ $('rr').innerHTML=r.map(v=>`<div class="bar"><span style="width:56px">${v.toFixed(3)}</span><i class="${v<mn*1.01?'b':''}" style="width:${v/mx*60}%"></i></div>`).join('')+`<p class="mut">Лучший результат (синие) получен в ${ok} из 10 запусков. Худший SSE в ${(mx/mn).toFixed(2)} раза больше лучшего.</p>`};
+function tick(){if(playing&&++fc%30==0){if(conv){playing=false;$('play').textContent='▶ Play'}else step();draw()}requestAnimationFrame(tick)}
+addEventListener('resize',fit);gen();fit();tick();
+</script></main></body></html>

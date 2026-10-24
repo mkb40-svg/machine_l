@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Лаборатория 13: иерархическая кластеризация и DBSCAN</title>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--card:#f4f4f6;--bd:#d8d8de;--r:#d6336c;--A:#2b7de9;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--r:#f06595;--A:#5b9cf5}}
+:root[data-theme="dark"]{--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--r:#f06595;--A:#5b9cf5}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.05rem;margin:1.2em 0 .4em}
+p{margin:.4em 0}.mut{color:var(--mut);font-size:.92rem}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media(max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+canvas{width:100%;display:block;border:1px solid var(--bd);border-radius:10px;background:var(--bg)}
+#pl{aspect-ratio:1/1}#dg{aspect-ratio:1.5/1}
+button{font:inherit;padding:7px 10px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);cursor:pointer}
+button.on{border-color:var(--fg);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;align-items:center}
+label{display:block;font-size:.92rem;margin-top:8px}input[type=range]{width:100%}
+ol{padding-left:1.2em;margin:.3em 0}li{margin:.3em 0}
+.grid>*,.two>*,.three>*,.g3>*{min-width:0}
+.card{max-width:100%}
+</style></head><body><main>
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab12_kmeans.html" style="color:var(--fg)">← 12. Алгоритм K-Means</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab14_quality.html" style="color:var(--fg)">14. Оценка качества кластеризации →</a></nav>
+<h1>Лаборатория 13. Иерархическая кластеризация и DBSCAN</h1>
+<p class="mut">K-Means ищет компактные круглые группы и требует заранее знать k. Два других подхода работают иначе: иерархическая кластеризация строит дерево слияний, а DBSCAN растит кластеры из плотных областей и умеет отбрасывать шум.</p>
+<div class="row"><button id="m0" class="on">Иерархическая (агломеративная)</button><button id="m1">DBSCAN</button></div>
+<div class="row"><span class="mut">Данные:</span><button id="d0" class="on">Три группы</button><button id="d1">Полумесяцы</button><button id="d2">Кольца</button><button id="d3">Группы и шум</button><button id="nw">Новые данные</button></div>
+<div class="grid">
+<div><canvas id="pl"></canvas><p class="mut" id="tx"></p></div>
+<div>
+<div class="card" id="cA">
+<div class="row"><span class="mut">Связь (linkage):</span><button id="ls" class="on">Single</button><button id="lc">Complete</button><button id="la">Average</button><button id="lw">Ward</button></div>
+<label>Число кластеров (уровень разреза): <b id="kv"></b><input id="k" type="range" min="1" max="12" value="3"></label>
+<div class="row"><button id="pa">▶ Слияния по шагам</button></div>
+</div>
+<div class="card" id="cB" style="display:none">
+<label>Радиус ε: <b id="ev"></b><input id="e" type="range" min="2" max="20" value="7"></label>
+<label>Минимум соседей minPts: <b id="mv"></b><input id="m" type="range" min="2" max="10" value="4"></label>
+<div class="row"><button id="pb">▶ Рост кластеров</button><button id="sb">Шаг</button><button id="rb">Сначала</button></div>
+<p class="mut">Наведите курсор на плоскость: круг покажет окрестность радиуса ε.</p>
+</div>
+<div class="card"><b id="dt"></b><canvas id="dg"></canvas><p class="mut" id="dn"></p></div>
+</div></div>
+
+<h2>Что происходит</h2>
+<p><b>Агломеративная кластеризация</b> начинает с того, что каждый документ это отдельный кластер, и на каждом шаге сливает два ближайших. Результат это дерево (дендрограмма): высота ветвления показывает расстояние, на котором группы объединились. Горизонтальный «разрез» дерева даёт нужное число кластеров, поэтому k можно выбрать уже после построения. Способ измерять расстояние между кластерами (linkage) сильно влияет на результат: single склеивает цепочками, complete стремится к компактным шарам, Ward минимизирует рост дисперсии.</p>
+<p><b>DBSCAN</b> использует два параметра: радиус ε и минимум соседей minPts. Документ, у которого в радиусе ε не меньше minPts соседей, называется <b>ядром</b>. Кластер это ядра, связанные цепочкой, плюс <b>краевые</b> точки рядом с ними. Остальные документы признаются <b>шумом</b>. Число кластеров находится само, а форма может быть любой. Для подбора ε помогает график расстояний до minPts-го соседа: ищут «излом».</p>
+
+<h2>Эксперименты</h2>
+<ol>
+<li>Выберите «Полумесяцы». Сравните Single и Complete при k = 2. Какая связь разделила полумесяцы правильно и почему?</li>
+<li>На «Кольцах» попробуйте все четыре связи. Какая справляется?</li>
+<li>Выберите «Группы и шум» и Single. Что происходит с шумовыми точками при k = 3? Сколько кластеров нужно, чтобы они «выделились» в отдельные ветви?</li>
+<li>Включите DBSCAN на «Полумесяцах» и «Кольцах». Все ли подходит при ε = 0.07 и minPts = 4?</li>
+<li>Сильно уменьшите ε, затем увеличьте. Как меняется число кластеров и число шумовых точек?</li>
+<li>На «Группах и шуме» подберите ε по излому графика расстояний.</li>
+</ol>
+<h2>Вопросы для самопроверки</h2>
+<ol>
+<li>Почему single linkage умеет находить вытянутые формы, но чувствителен к «мостикам» из шума?</li>
+<li>Почему DBSCAN не требует заранее задавать число кластеров, но требует выбрать ε?</li>
+<li>В чём разница между краевой точкой и шумом и как это видно на картинке?</li>
+</ol>
+
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab12_kmeans.html" style="color:var(--fg)">← 12. Алгоритм K-Means</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab14_quality.html" style="color:var(--fg)">14. Оценка качества кластеризации →</a></nav>
+<script>
+const $=id=>document.getElementById(id);
+const pl=$('pl'),px=pl.getContext('2d'),dg=$('dg'),dx=dg.getContext('2d');
+const PAL=['#2b7de9','#e8841a','#12915f','#d6336c','#8e44ad','#c9a000','#00a3b4','#7a5c3a','#e03131','#5f3dc4','#2f9e44','#f08c00'];
+let seed=3,pts=[],mode=0,method='s',merges=[],K=3,pre=0,eps=.07,mp=4,db=null,reveal=0,pa=false,pb=false,fc=0,W=400,hov=null,labA=[];
+const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
+const gs=()=>Math.sqrt(-2*Math.log(rnd()+1e-9))*Math.cos(2*Math.PI*rnd());
+const cl=v=>Math.max(.02,Math.min(.98,v));
+const col=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function gen(){pts=[];const P=(x,y)=>pts.push({x:cl(x),y:cl(y)});
+ const b=(n,cx,cy,s)=>{for(let i=0;i<n;i++)P(cx+s*gs(),cy+s*gs())};
+ if(pre==0){b(30,.25,.3,.05);b(30,.72,.3,.05);b(30,.5,.75,.05)}
+ else if(pre==1){for(let i=0;i<45;i++){const t=Math.PI*i/44;P(.28+.24*Math.cos(t)+.015*gs(),.32+.28*Math.sin(t)+.015*gs());P(.28+.24*(1-Math.cos(t))+.015*gs(),.46-.28*Math.sin(t)+.015*gs())}}
+ else if(pre==2){for(let i=0;i<40;i++){const t=(i+.6*rnd())/40*6.283;P(.5+.1*Math.cos(t)+.01*gs(),.5+.1*Math.sin(t)+.01*gs())}
+  for(let i=0;i<100;i++){const t=(i+.6*rnd())/100*6.283;P(.5+.33*Math.cos(t)+.01*gs(),.5+.33*Math.sin(t)+.01*gs())}}
+ else{b(25,.25,.3,.045);b(25,.72,.28,.045);b(25,.5,.75,.045);for(let i=0;i<15;i++)P(.03+.94*rnd(),.03+.94*rnd())}
+ recompute()}
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+function linkage(){const n=pts.length,w=method=='w',D=[],act=Array(n).fill(true),id=[],sz=Array(n).fill(1);merges=[];
+ for(let i=0;i<n;i++){D[i]=[];id[i]=i;for(let j=0;j<n;j++){const d=dist(pts[i],pts[j]);D[i][j]=w?d*d:d}}
+ for(let m=0;m<n-1;m++){let bi=-1,bj=-1,bd=1e9;
+  for(let i=0;i<n;i++)if(act[i])for(let j=i+1;j<n;j++)if(act[j]&&D[i][j]<bd){bd=D[i][j];bi=i;bj=j}
+  merges.push({a:id[bi],b:id[bj],h:w?Math.sqrt(bd):bd});const na=sz[bi],nb=sz[bj];
+  for(let t=0;t<n;t++){if(!act[t]||t==bi||t==bj)continue;const da=D[bi][t],db=D[bj][t],nt=sz[t];let v;
+   if(method=='s')v=Math.min(da,db);else if(method=='c')v=Math.max(da,db);else if(method=='a')v=(na*da+nb*db)/(na+nb);else v=((nt+na)*da+(nt+nb)*db-nt*bd)/(nt+na+nb);
+   D[bi][t]=D[t][bi]=v}
+  act[bj]=false;id[bi]=n+m;sz[bi]=na+nb}}
+function cutLabels(k){const n=pts.length,par=Array.from({length:2*n},(_,i)=>i);
+ for(let m=0;m<n-k;m++){par[merges[m].a]=n+m;par[merges[m].b]=n+m}
+ const f=i=>{while(par[i]!=i)i=par[i];return i},map={};let c=0;return pts.map((_,i)=>{const r=f(i);if(!(r in map))map[r]=c++;return map[r]})}
+function runDb(){const n=pts.length,lab=Array(n).fill(-2),ev=[],nb=i=>{const r=[];for(let j=0;j<n;j++)if(dist(pts[i],pts[j])<=eps)r.push(j);return r};let cid=0;
+ for(let i=0;i<n;i++){if(lab[i]!=-2)continue;const N=nb(i);if(N.length<mp){lab[i]=-1;ev.push([i,-1]);continue}
+  lab[i]=cid;ev.push([i,cid]);const q=[...N];
+  while(q.length){const j=q.shift();if(lab[j]==-1){lab[j]=cid;ev.push([j,cid]);continue}if(lab[j]!=-2)continue;lab[j]=cid;ev.push([j,cid]);const Nj=nb(j);if(Nj.length>=mp)q.push(...Nj)}
+  cid++}
+ db={lab,ev,core:pts.map((_,i)=>nb(i).length>=mp),nc:cid};reveal=ev.length}
+function recompute(){linkage();runDb()}
+function drawPl(){const c=px,T=v=>v*W,U=v=>(1-v)*W;c.clearRect(0,0,W,W);
+ if(mode==0){labA=cutLabels(K);pts.forEach((p,i)=>{c.beginPath();c.arc(T(p.x),U(p.y),5,0,7);c.fillStyle=PAL[labA[i]%12];c.fill();c.strokeStyle=col('--bg');c.lineWidth=1;c.stroke()});
+  $('tx').textContent=`Кластеров: ${K}.`}
+ else{const lab=Array(pts.length).fill(-2);for(let i=0;i<reveal;i++)lab[db.ev[i][0]]=db.ev[i][1];
+  let nz=0,co=0,bo=0;
+  pts.forEach((p,i)=>{const l=lab[i],x=T(p.x),y=U(p.y);
+   if(l==-2){c.beginPath();c.arc(x,y,3.5,0,7);c.fillStyle=col('--bd');c.fill();return}
+   if(l==-1){nz++;c.strokeStyle=col('--mut');c.lineWidth=1.6;c.beginPath();c.moveTo(x-4,y-4);c.lineTo(x+4,y+4);c.moveTo(x+4,y-4);c.lineTo(x-4,y+4);c.stroke();return}
+   const isC=db.core[i];isC?co++:bo++;c.beginPath();c.arc(x,y,isC?6:3.6,0,7);c.fillStyle=PAL[l%12];c.fill();c.strokeStyle=isC?col('--fg'):col('--bg');c.lineWidth=isC?1.4:1;c.stroke()});
+  if(hov){c.beginPath();c.arc(T(hov.x),U(hov.y),eps*W,0,7);c.strokeStyle=col('--r');c.lineWidth=2;c.setLineDash([5,4]);c.stroke();c.setLineDash([])}
+  const cnt=hov?pts.filter(p=>dist(p,hov)<=eps).length:null;
+  $('tx').innerHTML=`Кластеров: <b>${db.nc}</b>, ядер: ${co}, краевых: ${bo}, шума (×): ${nz}.`+(hov?` В круге ${cnt} документов: ${cnt>=mp?'здесь было бы <b>ядро</b>':'для ядра мало'}.`:'')+(reveal<db.ev.length?` Показано ${reveal} из ${db.ev.length} шагов.`:'')}}
+function drawDend(){const w=dg.clientWidth,h=w/1.5,c=dx,n=pts.length;c.clearRect(0,0,w,h);
+ if(mode==0){$('dt').textContent='Дендрограмма';const root=2*n-2,ord=[];
+  const walk=v=>{if(v<n)ord.push(v);else{walk(merges[v-n].a);walk(merges[v-n].b)}};walk(root);
+  const pos={};ord.forEach((v,i)=>pos[v]=(i+.5)/n*(w-16)+8);const hh={};for(let i=0;i<n;i++)hh[i]=0;
+  const hmax=merges[n-2].h,Y=v=>h-8-v/(hmax*1.08)*(h-16),first={};for(let i=0;i<n;i++)first[i]=i;
+  merges.forEach((m,i)=>{const v=n+i;pos[v]=(pos[m.a]+pos[m.b])/2;hh[v]=m.h;first[v]=first[m.a]});
+  merges.forEach((m,i)=>{const v=n+i,below=i<n-K;c.strokeStyle=below?PAL[labA[first[v]]%12]:col('--mut');c.lineWidth=below?1.8:1.4;
+   c.beginPath();c.moveTo(pos[m.a],Y(hh[m.a]));c.lineTo(pos[m.a],Y(m.h));c.lineTo(pos[m.b],Y(m.h));c.lineTo(pos[m.b],Y(hh[m.b]));c.stroke()});
+  const cut=K>=n?0:K<=1?hmax*1.04:(merges[n-K-1].h+merges[n-K].h)/2;
+  c.setLineDash([6,4]);c.strokeStyle=col('--r');c.lineWidth=2;c.beginPath();c.moveTo(0,Y(cut));c.lineTo(w,Y(cut));c.stroke();c.setLineDash([]);
+  $('dn').textContent='Красная линия это разрез. Все ветви ниже неё образуют кластеры. Высота это расстояние, на котором группы слились.'}
+ else{$('dt').textContent='Расстояние до minPts-го соседа (по убыванию)';
+  const d=pts.map(p=>pts.map(q=>dist(p,q)).sort((a,b)=>a-b)[Math.min(mp,pts.length)-1]).sort((a,b)=>b-a),mx=Math.max(d[0],eps*1.15),Y=v=>h-8-v/mx*(h-16);
+  c.strokeStyle=col('--bd');c.strokeRect(.5,.5,w-1,h-1);c.beginPath();c.strokeStyle=col('--fg');c.lineWidth=2;d.forEach((v,i)=>{const x=8+i/(d.length-1)*(w-16);i?c.lineTo(x,Y(v)):c.moveTo(x,Y(v))});c.stroke();
+  c.setLineDash([6,4]);c.strokeStyle=col('--r');c.lineWidth=2;c.beginPath();c.moveTo(0,Y(eps));c.lineTo(w,Y(eps));c.stroke();c.setLineDash([]);
+  $('dn').textContent='Красная линия это текущий ε. Резкий излом кривой подсказывает значение ε: документы левее излома считаются шумом.'}}
+function draw(){$('kv').textContent=K;$('ev').textContent=eps.toFixed(3);$('mv').textContent=mp;drawPl();drawDend()}
+function fit(){const d=devicePixelRatio||1;W=pl.clientWidth;[[pl,px],[dg,dx]].forEach(([c,x])=>{c.width=c.clientWidth*d;c.height=c.clientHeight*d;x.setTransform(d,0,0,d,0,0)});draw()}
+const tg=(ids,i)=>ids.forEach((d,j)=>$(d).classList.toggle('on',j==i));
+function setMode(m){mode=m;tg(['m0','m1'],m);$('cA').style.display=m?'none':'';$('cB').style.display=m?'':'none';draw()}
+$('m0').onclick=()=>setMode(0);$('m1').onclick=()=>setMode(1);
+['d0','d1','d2','d3'].forEach((id,i)=>$(id).onclick=()=>{pre=i;tg(['d0','d1','d2','d3'],i);gen();draw()});
+$('nw').onclick=()=>{seed=Math.floor(Math.random()*1e6)+1;gen();draw()};
+['ls','lc','la','lw'].forEach((id,i)=>$(id).onclick=()=>{method='scaw'[i];tg(['ls','lc','la','lw'],i);linkage();draw()});
+$('k').oninput=e=>{K=+e.target.value;pa=false;$('pa').textContent='▶ Слияния по шагам';draw()};
+$('e').oninput=e=>{eps=e.target.value/100;runDb();draw()};$('m').oninput=e=>{mp=+e.target.value;runDb();draw()};
+$('pa').onclick=()=>{pa=!pa;if(pa&&K<=1){K=12;$('k').value=12}$('pa').textContent=pa?'⏸ Пауза':'▶ Слияния по шагам'};
+$('pb').onclick=()=>{pb=!pb;if(pb&&reveal>=db.ev.length)reveal=0;$('pb').textContent=pb?'⏸ Пауза':'▶ Рост кластеров'};
+$('sb').onclick=()=>{if(reveal<db.ev.length)reveal++;draw()};$('rb').onclick=()=>{reveal=0;pb=false;$('pb').textContent='▶ Рост кластеров';draw()};
+pl.onpointermove=e=>{if(mode!=1)return;const r=pl.getBoundingClientRect();hov={x:(e.clientX-r.left)/r.width,y:1-(e.clientY-r.top)/r.height};drawPl()};
+pl.onpointerleave=()=>{hov=null;if(mode==1)drawPl()};
+function tick(){fc++;if(pa&&fc%25==0){if(K>1){K--;$('k').value=K}else{pa=false;$('pa').textContent='▶ Слияния по шагам'}draw()}
+ if(pb&&mode==1&&fc%3==0){if(reveal<db.ev.length)reveal++;else{pb=false;$('pb').textContent='▶ Рост кластеров'}draw()}requestAnimationFrame(tick)}
+addEventListener('resize',fit);gen();fit();tick();
+</script></main></body></html>

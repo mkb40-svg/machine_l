@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Лаборатория 9: подбор гиперпараметров</title>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--card:#f4f4f6;--bd:#d8d8de;--g:#12915f;--r:#d6336c;--A:#2b7de9;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--g:#3fcf94;--r:#f06595;--A:#5b9cf5}}
+:root[data-theme="dark"]{--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--g:#3fcf94;--r:#f06595;--A:#5b9cf5}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.05rem;margin:1.2em 0 .4em}
+p{margin:.4em 0}.mut{color:var(--mut);font-size:.92rem}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:620px){.two{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+canvas{width:100%;display:block;border:1px solid var(--bd);border-radius:10px;background:var(--bg)}
+#cg,#cr{aspect-ratio:1/1}#ch{aspect-ratio:2.2/1}
+button{font:inherit;padding:7px 12px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);cursor:pointer}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;align-items:center}
+label{display:block;font-size:.92rem;margin-top:8px}input[type=range]{width:100%}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.88rem}
+td,th{padding:5px 6px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+.bar{height:12px;border-radius:6px;background:linear-gradient(90deg,rgb(30,40,110),rgb(30,150,160),rgb(250,225,80));margin:4px 0}
+ol{padding-left:1.2em;margin:.3em 0}li{margin:.3em 0}
+.grid>*,.two>*,.three>*,.g3>*{min-width:0}
+.card{max-width:100%}
+</style></head><body><main>
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab08_forest.html" style="color:var(--fg)">← 8. Случайный лес</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab10_imbalance.html" style="color:var(--fg)">10. Дисбаланс классов →</a></nav>
+<h1>Лаборатория 9. Подбор гиперпараметров: Grid Search и Random Search</h1>
+<p class="mut">Мы настраиваем классификатор kNN по двум гиперпараметрам: числу соседей k (по горизонтали) и весу α шумового признака (по вертикали, логарифмическая шкала). Цвет фона это настоящая точность кросс-валидации (leave-one-out) для каждой пары. Каждый поиск ограничен бюджетом: он может «попробовать» только n пар. Кто найдёт лучшую точку за меньшее число попыток?</p>
+<div class="bar"></div><div class="row mut" style="justify-content:space-between;margin:0"><span>низкая точность</span><span>высокая точность</span></div>
+<div class="two">
+<div><b><span class="dot" style="background:var(--g)"></span>Grid Search</b> <span class="mut">(регулярная сетка)</span><canvas id="cg"></canvas></div>
+<div><b><span class="dot" style="background:var(--r)"></span>Random Search</b> <span class="mut">(случайные точки)</span><canvas id="cr"></canvas></div>
+</div>
+<p class="mut" id="hv">Наведите курсор на карту, чтобы увидеть k, α и точность в этой точке.</p>
+<div class="card">
+<div class="row"><button id="pl">▶ Play</button><button id="sp">Шаг</button><button id="rs">Сначала</button><button id="nr">Новый случайный поиск</button><button id="nw">Новые данные</button></div>
+<label>Бюджет (число проб): <b id="nv"></b><input id="n" type="range" min="4" max="64" value="25"></label>
+<div class="tw"><table id="tb"></table></div>
+</div>
+<div class="card"><b>Лучшая найденная точность в зависимости от бюджета</b><canvas id="ch"></canvas>
+<p class="mut"><span class="dot" style="background:var(--g)"></span>сетка &nbsp;<span class="dot" style="background:var(--r)"></span>случайный поиск, среднее по 300 запускам &nbsp;<span class="dot" style="background:var(--A)"></span>текущий запуск случайного поиска &nbsp;(пунктир: настоящий максимум на карте)</p></div>
+
+<h2>Что происходит</h2>
+<p><b>Параметры</b> модели (например, веса) подбираются обучением. <b>Гиперпараметры</b> (k, сила регуляризации, глубина дерева) задаёт человек, и каждую попытку надо оценивать кросс-валидацией, то есть дорого. Grid Search равномерно проверяет сетку значений. Random Search берёт случайные комбинации.</p>
+<p>Здесь важнее вертикальная ось: хорошее значение α узкое, а k влияет слабо. У сетки 5×5 всего 5 разных значений α, остальные 20 проб повторяют те же α с другим k. У случайного поиска все 25 значений α разные, поэтому он чаще попадает в удачную область. Такое неравенство важности гиперпараметров встречается очень часто.</p>
+<p>Итоговая точность, найденная на кросс-валидации, слегка завышена: мы выбрали лучшее из многих. Поэтому в таблице есть и точность на отдельной тестовой выборке.</p>
+
+<h2>Эксперименты</h2>
+<ol>
+<li>Поставьте бюджет 16 и нажмите Play. Сколько разных значений α проверила сетка, а сколько случайный поиск?</li>
+<li>Несколько раз нажмите «Новый случайный поиск». Всегда ли он лучше сетки при том же бюджете?</li>
+<li>Посмотрите на график: при каком бюджете среднее по случайному поиску догоняет сетку и догоняет ли настоящий максимум?</li>
+<li>Сравните точность на кросс-валидации и на тесте у лучшей найденной точки. Какая выше и почему?</li>
+<li>Нажмите «Новые данные». Меняется ли положение хорошей области?</li>
+</ol>
+<h2>Вопросы для самопроверки</h2>
+<ol>
+<li>Почему подбирать гиперпараметры по тестовой выборке нельзя?</li>
+<li>В каком случае сетка не хуже случайного поиска?</li>
+<li>Что делать, если одна проба обучения занимает час (идея: байесовская оптимизация, Successive Halving)?</li>
+</ol>
+
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab08_forest.html" style="color:var(--fg)">← 8. Случайный лес</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab10_imbalance.html" style="color:var(--fg)">10. Дисбаланс классов →</a></nav>
+<script>
+const $=id=>document.getElementById(id);
+const cg=$('cg'),cr=$('cr'),ch=$('ch'),xg=cg.getContext('2d'),xr=cr.getContext('2d'),xh=ch.getContext('2d');
+const KM=40,AY=60,TM=64;
+let seed=9,train=[],test=[],S,smin,smax,grid,rand,n=25,p=0,fseed=3,meanR,gcurve,bg,playing=false,fc=0;
+const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
+const gs=()=>Math.sqrt(-2*Math.log(rnd()+1e-9))*Math.cos(2*Math.PI*rnd());
+const fr=()=>{fseed=(fseed*16807)%2147483647;return fseed/2147483647};
+const cl=v=>Math.max(.02,Math.min(.98,v));
+const col=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const arg=v=>v.indexOf(Math.max(...v));
+const alphaOf=a=>.05*Math.pow(400,a/(AY-1));
+const mk=()=>{const a=[];[.2,.5,.8].forEach((cx,c)=>{for(let i=0;i<40;i++)a.push({x:cl(cx+.09*gs()),y:cl(.5+.22*gs()),c})});return a};
+function surface(){S=[];smin=1;smax=0;
+ for(let a=0;a<AY;a++){const al=alphaOf(a),row=Array(KM).fill(0);
+  train.forEach((q,i)=>{const d=[];train.forEach((o,j)=>{if(j!=i)d.push([(q.x-o.x)**2+(al*(q.y-o.y))**2,o.c])});d.sort((u,v)=>u[0]-v[0]);
+   const v=[0,0,0];for(let k=0;k<KM;k++){v[d[k][1]]++;if(arg(v)==q.c)row[k]++}});
+  S.push(row.map(x=>{const s=x/train.length;smin=Math.min(smin,s);smax=Math.max(smax,s);return s}))}}
+function testAcc(k,a){const al=alphaOf(a);let ok=0;
+ test.forEach(q=>{const d=train.map(o=>[(q.x-o.x)**2+(al*(q.y-o.y))**2,o.c]).sort((u,v)=>u[0]-v[0]),v=[0,0,0];
+  for(let i=0;i<=k;i++)v[d[i][1]]++;if(arg(v)==q.c)ok++});return ok/test.length}
+function gridList(m){const gx=Math.max(1,Math.floor(Math.sqrt(m))),gy=Math.max(1,Math.floor(m/gx)),L=[];
+ for(let j=0;j<gy;j++)for(let i=0;i<gx;i++)L.push([gx==1?19:Math.round(i*(KM-1)/(gx-1)),gy==1?29:Math.round(j*(AY-1)/(gy-1))]);return L}
+function randList(){const L=[];for(let i=0;i<TM;i++)L.push([Math.floor(fr()*KM),Math.floor(fr()*AY)]);return L}
+function best(L,m){let b=null;for(let i=0;i<Math.min(m,L.length);i++){const[k,a]=L[i];if(!b||S[a][k]>b.s)b={k,a,s:S[a][k]}}return b}
+function curves(){gcurve=[];for(let m=1;m<=TM;m++)gcurve.push(best(gridList(m),m).s);
+ meanR=Array(TM).fill(0);for(let r=0;r<300;r++){let b=0;for(let i=0;i<TM;i++){b=Math.max(b,S[Math.floor(Math.random()*AY)][Math.floor(Math.random()*KM)]);meanR[i]+=b/300}}}
+function bgImg(){bg=document.createElement('canvas');bg.width=KM;bg.height=AY;const x=bg.getContext('2d'),im=x.createImageData(KM,AY);
+ for(let a=0;a<AY;a++)for(let k=0;k<KM;k++){const t=(S[a][k]-smin)/(smax-smin+1e-9),
+  c=t<.5?[30+(30-30)*t*2,40+110*t*2,110+50*t*2]:[30+220*(t-.5)*2,150+75*(t-.5)*2,160-80*(t-.5)*2];
+  im.data.set([...c,255],((AY-1-a)*KM+k)*4)}x.putImageData(im,0,0)}
+function dh(c,x,L,color){const w=c.clientWidth;x.clearRect(0,0,w,w);x.imageSmoothingEnabled=false;x.drawImage(bg,0,0,w,w);
+ const X=k=>(k+.5)/KM*w,Y=a=>(1-(a+.5)/AY)*w;
+ for(let i=0;i<Math.min(p,L.length);i++){const[k,a]=L[i];x.beginPath();x.arc(X(k),Y(a),i==p-1?6:4,0,7);x.fillStyle='#fff';x.fill();x.strokeStyle='#111';x.lineWidth=1.3;x.stroke()}
+ const b=best(L,p);if(b){x.beginPath();x.arc(X(b.k),Y(b.a),9,0,7);x.strokeStyle=col(color);x.lineWidth=3.5;x.stroke()}
+ x.fillStyle='#fff';x.font='bold 11px system-ui';x.shadowColor='#000';x.shadowBlur=3;x.fillText('k →',w-28,w-6);x.fillText('↑ α',5,14);x.shadowBlur=0}
+function drawCh(){const w=ch.clientWidth,h=w/2.2,c=xh;c.clearRect(0,0,w,h);const rl=best(rand,TM);
+ const lo=Math.floor(Math.min(gcurve[0],meanR[0])*20)/20,hi=smax,xs=m=>26+(m-1)/(TM-1)*(w-34),ys=v=>h-12-(v-lo)/(hi-lo+1e-9)*(h-22);
+ c.strokeStyle=col('--bd');c.strokeRect(.5,.5,w-1,h-1);c.fillStyle=col('--mut');c.font='11px system-ui';c.fillText((hi*100).toFixed(0)+'%',2,12);c.fillText((lo*100).toFixed(0)+'%',2,h-10);c.fillText('бюджет →',w-56,h-1);
+ c.setLineDash([5,4]);c.strokeStyle=col('--fg');c.lineWidth=1;c.beginPath();c.moveTo(26,ys(hi));c.lineTo(w-6,ys(hi));c.stroke();c.setLineDash([]);
+ const pl=(arr,cc,lw)=>{c.beginPath();c.strokeStyle=col(cc);c.lineWidth=lw;arr.forEach((v,i)=>i?c.lineTo(xs(i+1),ys(v)):c.moveTo(xs(i+1),ys(v)));c.stroke()};
+ pl(gcurve,'--g',2);pl(meanR,'--r',2);
+ const cur=[];let b=0;for(let i=0;i<TM;i++){b=Math.max(b,S[rand[i][1]][rand[i][0]]);cur.push(b)};pl(cur,'--A',1.5);
+ c.setLineDash([4,4]);c.strokeStyle=col('--fg');c.beginPath();c.moveTo(xs(n),4);c.lineTo(xs(n),h-12);c.stroke();c.setLineDash([])}
+function table(){const gl=gridList(n),pg=Math.min(p,gl.length);let h='<tr><th>Метод</th><th>Проб</th><th>Лучшие k, α</th><th>CV</th><th>Тест</th></tr>';
+ [['Grid','--g',gl,pg],['Random','--r',rand.slice(0,n),Math.min(p,n)]].forEach(([nm,cc,L,m])=>{const b=best(L,m);
+  h+=`<tr><td><span class="dot" style="background:${col(cc)}"></span>${nm}</td><td>${m}</td>`+(b?`<td>k=${b.k+1}, α=${alphaOf(b.a).toFixed(2)}</td><td>${(b.s*100).toFixed(1)}%</td><td>${(testAcc(b.k,b.a)*100).toFixed(1)}%</td>`:'<td>—</td><td>—</td><td>—</td>')+'</tr>'});
+ h+=`<tr><td>Максимум на карте</td><td>—</td><td></td><td>${(smax*100).toFixed(1)}%</td><td></td></tr>`;$('tb').innerHTML=h}
+function draw(){const gl=gridList(n);$('nv').textContent=n;dh(cg,xg,gl,'--g');dh(cr,xr,rand.slice(0,n),'--r');drawCh();table()}
+function fit(){const d=devicePixelRatio||1;[[cg,xg],[cr,xr],[ch,xh]].forEach(([c,x])=>{c.width=c.clientWidth*d;c.height=c.clientHeight*d;x.setTransform(d,0,0,d,0,0)});draw()}
+function hover(e){const c=e.target,r=c.getBoundingClientRect(),k=Math.floor((e.clientX-r.left)/r.width*KM),a=Math.floor((1-(e.clientY-r.top)/r.height)*AY);
+ if(k>=0&&k<KM&&a>=0&&a<AY)$('hv').textContent=`k = ${k+1}, α = ${alphaOf(a).toFixed(2)}: точность кросс-валидации ${(S[a][k]*100).toFixed(1)}%`}
+cg.onpointermove=cr.onpointermove=hover;
+function newData(){seed=Math.floor(Math.random()*1e6)+1;train=mk();test=mk();surface();bgImg();curves();rand=randList();p=0}
+function tick(){if(playing&&++fc%8==0){if(p<n)p++;else{playing=false;$('pl').textContent='▶ Play'}draw()}requestAnimationFrame(tick)}
+$('pl').onclick=()=>{if(p>=n)p=0;playing=!playing;$('pl').textContent=playing?'⏸ Пауза':'▶ Play'};
+$('sp').onclick=()=>{if(p<n)p++;draw()};$('rs').onclick=()=>{p=0;draw()};
+$('nr').onclick=()=>{fseed=Math.floor(Math.random()*1e6)+1;rand=randList();p=0;draw()};
+$('nw').onclick=()=>{newData();draw()};
+$('n').oninput=e=>{n=+e.target.value;p=Math.min(p,n);draw()};
+addEventListener('resize',fit);newData();fit();tick();
+</script></main></body></html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Лаборатория 3: multiclass и multilabel</title>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--card:#f4f4f6;--bd:#d8d8de;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f}}
+:root[data-theme="dark"]{--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.05rem;margin:1.2em 0 .4em}
+p{margin:.4em 0}.mut{color:var(--mut);font-size:.92rem}
+.grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px}
+@media(max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+canvas{width:100%;aspect-ratio:1/1;display:block;border:1px solid var(--bd);border-radius:10px;background:var(--bg);touch-action:none;cursor:crosshair}
+button{font:inherit;padding:7px 11px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);cursor:pointer}
+button.on{border-color:var(--fg);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;align-items:center}
+label{display:block;font-size:.92rem;margin-top:8px}input[type=range]{width:100%}
+.bar{display:flex;align-items:center;gap:8px;font-size:.9rem;margin:4px 0}.bar span{width:84px}.bar i{display:block;height:13px;border-radius:4px}
+.tw{overflow-x:auto}table{border-collapse:collapse;font-size:.88rem}td,th{padding:4px 9px;border:1px solid var(--bd);text-align:left;white-space:nowrap}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+ol{padding-left:1.2em;margin:.3em 0}li{margin:.3em 0}
+.grid>*,.two>*,.three>*,.g3>*{min-width:0}
+.card{max-width:100%}
+</style></head><body><main>
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab02_datasets.html" style="color:var(--fg)">← 2. Подготовка наборов данных</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab04_linear.html" style="color:var(--fg)">4. Линейные модели и границы →</a></nav>
+<h1>Лаборатория 3. Multiclass и multilabel классификация</h1>
+<p class="mut">В multiclass у документа ровно один класс из нескольких. В multilabel у документа может быть несколько меток сразу (или ни одной). Новостная статья о бюджете спортивного клуба относится и к «Спорту», и к «Экономике». Перетащите звезду ★ и посмотрите, как по-разному отвечают две постановки.</p>
+<div class="row"><button id="m1" class="on">Фон: multiclass (один класс)</button><button id="m2">Фон: multilabel (набор меток)</button></div>
+<div class="grid">
+<div><canvas id="cv"></canvas>
+<p class="mut"><span class="dot" style="background:#2b7de9"></span>Спорт &nbsp;<span class="dot" style="background:#e8841a"></span>Политика &nbsp;<span class="dot" style="background:#12915f"></span>Экономика. Документы с двумя метками показаны двухцветными кружками.</p></div>
+<div>
+<div class="card"><b>Ответ модели для ★</b><div class="mut" style="margin-top:6px">Multiclass (softmax): вероятности в сумме дают 1</div><div id="b1"></div><p id="r1"></p>
+<div class="mut">Multilabel (независимые сигмоиды): каждая метка отдельно</div><div id="b2"></div>
+<label>Порог метки: <b id="tv"></b><input id="th" type="range" min="10" max="90" value="50"></label><p id="r2"></p></div>
+<div class="card"><b>Качество на тестовых документах</b><div class="tw"><table id="mt"></table></div></div>
+</div></div>
+
+<h2>Что происходит</h2>
+<p><b>Multiclass</b>: модель выдаёт распределение вероятностей по классам (softmax), и класс выбирается один: argmax. Вероятности конкурируют друг с другом, поэтому на стыке двух тем ни одна не получит близкую к 1 вероятность, но выбрать придётся только одну. <b>Multilabel</b>: для каждой метки обучается отдельный бинарный классификатор (сигмоида), вероятности независимы и не обязаны давать в сумме 1. Метка присваивается, если её вероятность выше порога, поэтому документ может получить две метки или ни одной.</p>
+<p>В данных у части документов (на стыках групп) две настоящие метки. В multiclass приходится выбрать одну из них случайно, и информация теряется. Для multilabel нужны и другие метрики: <b>точное совпадение</b> всего набора меток (строгая), <b>Hamming loss</b> (доля неверных отдельных решений «метка есть или нет») и <b>F1 micro</b>.</p>
+
+<h2>Эксперименты</h2>
+<ol>
+<li>Поставьте ★ в центр одной группы, затем на стык двух групп. Что показывают столбики softmax и столбики сигмоид?</li>
+<li>Поставьте ★ далеко от всех групп. Что отвечает multiclass, а что multilabel?</li>
+<li>Меняйте порог метки. Как меняется набор меток для ★ на стыке?</li>
+<li>Переключите фон на multilabel. Какие цвета на стыках и почему появляются «пустые» области?</li>
+<li>Сравните метрики: почему точное совпадение у multilabel ниже, чем доля верных решений?</li>
+</ol>
+<h2>Вопросы для самопроверки</h2>
+<ol>
+<li>Когда нужно использовать softmax, а когда независимые сигмоиды?</li>
+<li>Почему accuracy для multilabel определять сложнее, чем для multiclass?</li>
+<li>Приведите задачу из компьютерной лингвистики, где нужна multilabel классификация.</li>
+</ol>
+
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab02_datasets.html" style="color:var(--fg)">← 2. Подготовка наборов данных</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab04_linear.html" style="color:var(--fg)">4. Линейные модели и границы →</a></nav>
+<script>
+const $=id=>document.getElementById(id);
+const cv=$('cv'),cx=cv.getContext('2d');
+const CN=['Спорт','Политика','Экономика'],CAL=['#2b7de9','#e8841a','#12915f'],RGB=[[43,125,233],[232,132,26],[18,145,95]],CEN=[[.22,.28],[.78,.28],[.5,.8]];
+let seed=12,tr=[],te=[],W=400,star={x:.4,y:.45},drag=false,mode=0,mc,ml,thr=.5;
+const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
+const gs=()=>Math.sqrt(-2*Math.log(rnd()+1e-9))*Math.cos(2*Math.PI*rnd());
+const cc=v=>Math.max(.02,Math.min(.98,v));
+const col=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function mk(n){const a=[];for(let i=0;i<n;i++){let L;const u=rnd();if(u<.3){const f=Math.floor(rnd()*3),g=(f+1+Math.floor(rnd()*2))%3;L=[f,g]}else L=[Math.floor(rnd()*3)];
+  const x=L.reduce((s,l)=>s+CEN[l][0],0)/L.length+.07*gs(),y=L.reduce((s,l)=>s+CEN[l][1],0)/L.length+.07*gs();
+  a.push({x:cc(x),y:cc(y),L,c:L[0]})}return a}
+tr=mk(300);te=mk(300);
+const feat=p=>[(p.x-.5)*4,(p.y-.5)*4];
+const sg=z=>1/(1+Math.exp(-z));
+function trainSoft(){const W=Array.from({length:3},()=>[0,0,0]);for(let it=0;it<500;it++){const G=Array.from({length:3},()=>[0,0,0]);
+ tr.forEach(p=>{const f=feat(p),z=W.map(w=>w[0]*f[0]+w[1]*f[1]+w[2]),m=Math.max(...z),e=z.map(v=>Math.exp(v-m)),s=e.reduce((a,v)=>a+v,0);
+  for(let k=0;k<3;k++){const g=e[k]/s-(p.c==k?1:0);G[k][0]+=g*f[0];G[k][1]+=g*f[1];G[k][2]+=g}});
+ for(let k=0;k<3;k++)for(let j=0;j<3;j++)W[k][j]-=1.2*G[k][j]/tr.length}return W}
+function trainSig(){const W=Array.from({length:3},()=>[0,0,0]);for(let it=0;it<500;it++){const G=Array.from({length:3},()=>[0,0,0]);
+ tr.forEach(p=>{const f=feat(p);for(let k=0;k<3;k++){const g=sg(W[k][0]*f[0]+W[k][1]*f[1]+W[k][2])-(p.L.includes(k)?1:0);G[k][0]+=g*f[0];G[k][1]+=g*f[1];G[k][2]+=g}});
+ for(let k=0;k<3;k++)for(let j=0;j<3;j++)W[k][j]-=1.2*G[k][j]/tr.length}return W}
+mc=trainSoft();ml=trainSig();
+function soft(p){const f=feat(p),z=mc.map(w=>w[0]*f[0]+w[1]*f[1]+w[2]),m=Math.max(...z),e=z.map(v=>Math.exp(v-m)),s=e.reduce((a,v)=>a+v,0);return e.map(v=>v/s)}
+function sig(p){const f=feat(p);return ml.map(w=>sg(w[0]*f[0]+w[1]*f[1]+w[2]))}
+const arg=v=>v.indexOf(Math.max(...v));
+function draw(){W=cv.clientWidth;const c=cx,T=v=>v*W,U=v=>(1-v)*W,g=44,s=W/g;c.clearRect(0,0,W,W);
+ for(let j=0;j<g;j++)for(let i=0;i<g;i++){const p={x:(i+.5)/g,y:1-(j+.5)/g};
+  if(mode==0){c.fillStyle=`rgb(${RGB[arg(soft(p))]})`;c.globalAlpha=.16}
+  else{const q=sig(p),on=[0,1,2].filter(k=>q[k]>=thr);if(!on.length){continue}c.fillStyle=`rgb(${[0,1,2].map(ch=>Math.round(on.reduce((a,k)=>a+RGB[k][ch],0)/on.length))})`;c.globalAlpha=.1+.12*on.length}
+  c.fillRect(i*s,j*s,s+.5,s+.5)}c.globalAlpha=1;
+ tr.forEach(p=>{const x=T(p.x),y=U(p.y);if(p.L.length==1){c.beginPath();c.arc(x,y,4,0,7);c.fillStyle=CAL[p.L[0]];c.fill()}
+  else p.L.forEach((l,i)=>{c.beginPath();c.arc(x,y,4.5,i?Math.PI/2:-Math.PI/2,i?Math.PI*1.5:Math.PI/2);c.fillStyle=CAL[l];c.fill()})});
+ const x=T(star.x),y=U(star.y);c.beginPath();c.moveTo(x,y-12);c.lineTo(x+11,y);c.lineTo(x,y+12);c.lineTo(x-11,y);c.closePath();c.fillStyle=col('--bg');c.fill();c.strokeStyle=col('--fg');c.lineWidth=3;c.stroke();
+ const ps=soft(star),pg=sig(star),on=[0,1,2].filter(k=>pg[k]>=thr);$('tv').textContent=thr.toFixed(2);
+ $('b1').innerHTML=ps.map((v,k)=>`<div class="bar"><span>${CN[k]}</span><i style="width:${v*55}%;background:${CAL[k]}"></i>${(v*100).toFixed(0)}%</div>`).join('');
+ $('r1').innerHTML=`Класс: <b>${CN[arg(ps)]}</b>`;
+ $('b2').innerHTML=pg.map((v,k)=>`<div class="bar"><span>${CN[k]}</span><i style="width:${v*55}%;background:${CAL[k]};opacity:${v>=thr?1:.35}"></i>${(v*100).toFixed(0)}%</div>`).join('');
+ $('r2').innerHTML=`Метки: <b>${on.length?on.map(k=>CN[k]).join(' + '):'ни одной'}</b>`}
+function metrics(){const acc=te.filter(p=>arg(soft(p))==p.c).length/te.length,accAny=te.filter(p=>p.L.includes(arg(soft(p)))).length/te.length;let ex=0,ham=0,tp=0,fp=0,fn=0;
+ te.forEach(p=>{const q=sig(p);let all=true;for(let k=0;k<3;k++){const pr=q[k]>=.5,tr_=p.L.includes(k);if(pr!=tr_){ham++;all=false}if(pr&&tr_)tp++;else if(pr)fp++;else if(tr_)fn++}if(all)ex++});
+ const f1=2*tp/(2*tp+fp+fn);
+ $('mt').innerHTML=`<tr><th>Постановка</th><th>Метрика</th><th>Значение</th></tr><tr><td>Multiclass</td><td>Accuracy (совпал с «основной» меткой)</td><td>${(acc*100).toFixed(0)}%</td></tr><tr><td>Multiclass</td><td>Класс совпал хотя бы с одной настоящей меткой</td><td>${(accAny*100).toFixed(0)}%</td></tr>
+ <tr><td>Multilabel</td><td>Точное совпадение набора меток</td><td>${(ex/te.length*100).toFixed(0)}%</td></tr><tr><td>Multilabel</td><td>Hamming loss (доля неверных решений)</td><td>${(ham/(te.length*3)*100).toFixed(1)}%</td></tr><tr><td>Multilabel</td><td>F1 micro (порог 0.5)</td><td>${(f1*100).toFixed(0)}%</td></tr>`}
+function fit(){const d=devicePixelRatio||1;cv.width=cv.clientWidth*d;cv.height=cv.clientHeight*d;cx.setTransform(d,0,0,d,0,0);draw()}
+function setS(e){const r=cv.getBoundingClientRect();star={x:Math.max(.01,Math.min(.99,(e.clientX-r.left)/r.width)),y:Math.max(.01,Math.min(.99,1-(e.clientY-r.top)/r.height))};draw()}
+cv.onpointerdown=e=>{drag=true;cv.setPointerCapture(e.pointerId);setS(e)};cv.onpointermove=e=>{if(drag)setS(e)};cv.onpointerup=()=>drag=false;
+$('th').oninput=e=>{thr=e.target.value/100;draw()};
+$('m1').onclick=()=>{mode=0;$('m1').classList.add('on');$('m2').classList.remove('on');draw()};
+$('m2').onclick=()=>{mode=1;$('m2').classList.add('on');$('m1').classList.remove('on');draw()};
+addEventListener('resize',fit);metrics();fit();
+</script></main></body></html>

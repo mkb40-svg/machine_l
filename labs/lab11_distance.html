@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Лаборатория 11: расстояния, сходство, центроид</title>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--card:#f4f4f6;--bd:#d8d8de;--A:#2b7de9;--B:#e8841a;--g:#12915f;--r:#d6336c;--hl:43,125,233;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--A:#5b9cf5;--B:#f0a04b;--g:#3fcf94;--r:#f06595;--hl:91,156,245}}
+:root[data-theme="dark"]{--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--A:#5b9cf5;--B:#f0a04b;--g:#3fcf94;--r:#f06595;--hl:91,156,245}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.15rem;margin:1.4em 0 .4em}
+p{margin:.4em 0}.mut{color:var(--mut);font-size:.92rem}
+.grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px}
+@media(max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+canvas{width:100%;aspect-ratio:1/1;display:block;border:1px solid var(--bd);border-radius:10px;background:var(--bg);touch-action:none}
+button{font:inherit;padding:7px 11px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);cursor:pointer}
+button.on{border-color:var(--fg);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;align-items:center}
+.tw{overflow-x:auto}table{border-collapse:collapse;font-size:.85rem}
+td,th{padding:4px 7px;border:1px solid var(--bd);text-align:center;white-space:nowrap}
+td.l{text-align:left;max-width:280px;white-space:normal}
+textarea{width:100%;font:inherit;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+.bar{display:flex;align-items:center;gap:8px;font-size:.88rem;margin:3px 0}.bar i{display:block;height:12px;border-radius:4px;background:var(--A)}
+ol{padding-left:1.2em;margin:.3em 0}li{margin:.3em 0}
+.grid>*,.two>*,.three>*,.g3>*{min-width:0}
+.card{max-width:100%}
+</style></head><body><main>
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab10_imbalance.html" style="color:var(--fg)">← 10. Дисбаланс классов</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab12_kmeans.html" style="color:var(--fg)">12. Алгоритм K-Means →</a></nav>
+<h1>Лаборатория 11. Математика кластеризации: сходство, расстояние, центроид</h1>
+<p class="mut">Чтобы группировать тексты, нужно уметь сравнивать два документа числом. Для этого документ превращают в вектор (мешок слов), а сходство измеряют как угол или расстояние между векторами.</p>
+
+<h2>1. Евклидово и косинусное: два способа измерить близость</h2>
+<div class="grid">
+<div><canvas id="c1"></canvas><p class="mut">Тяните за кончики стрелок. Ось x: сколько раз встретилось слово «матч», ось y: слово «закон».</p></div>
+<div class="card">
+<div class="row"><button id="dbl">Удлинить B ×2 (тот же текст, но вдвое длиннее)</button><button id="nrm">Нормировать длины (L2)</button><button id="r1">Сбросить</button></div>
+<div id="s1"></div>
+</div></div>
+
+<h2>2. Реальные предложения: вектор, TF-IDF, матрица сходства</h2>
+<div class="card">
+<div class="row"><button id="tf" class="on">TF (счётчики)</button><button id="ti">TF-IDF</button>&nbsp;<button id="mc" class="on">Косинусное сходство</button><button id="me">Евклидово расстояние</button></div>
+<div class="tw"><table id="t2"></table></div>
+<p class="mut">Слова-признаки (основы): матч, гол, команд, закон, выбор, депутат, суп, рецепт, соль, добав, час, обсуд. Слова сопоставляются по началу, так мы грубо учитываем падежи.</p>
+<p><b>Свой документ:</b></p><textarea id="ud" rows="2">Команда забила гол в матче</textarea>
+<div id="s2"></div>
+</div>
+
+<h2>3. Центроид: средний документ кластера</h2>
+<div class="grid">
+<div><canvas id="c3"></canvas><p class="mut">Нажмите на график, чтобы добавить документ в кластер.</p></div>
+<div class="card">
+<div class="row"><button id="out">Добавить выброс</button><button id="r3">Сбросить</button></div>
+<div id="s3"></div>
+<p class="mut">✕ центроид (среднее по координатам), ◇ покоординатная медиана. Сумма квадратов расстояний до центроида (SSE) показывает, насколько кластер компактен.</p>
+</div></div>
+
+<h2>Эксперименты</h2>
+<ol>
+<li>В части 1 нажмите «Удлинить B ×2». Что произошло с евклидовым расстоянием и что с косинусным сходством? Какая мера лучше для сравнения коротких и длинных документов?</li>
+<li>Включите нормировку L2 и двигайте точки. Сравните евклидово расстояние и угол: они теперь согласованы?</li>
+<li>В части 2 переключите TF и TF-IDF. Какие слова вес понизил и почему?</li>
+<li>Введите в поле предложение про суп с упоминанием закона. К какому документу оно ближе?</li>
+<li>В части 3 добавьте выброс. Что сильнее сдвинулось: центроид или медиана?</li>
+</ol>
+<h2>Вопросы для самопроверки</h2>
+<ol>
+<li>Почему косинусное сходство называют мерой «направления» и когда это важно для текстов?</li>
+<li>Как связаны евклидово расстояние и косинусное сходство для векторов единичной длины?</li>
+<li>Почему K-Means использует среднее (центроид), и чем это опасно при выбросах?</li>
+</ol>
+
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab10_imbalance.html" style="color:var(--fg)">← 10. Дисбаланс классов</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab12_kmeans.html" style="color:var(--fg)">12. Алгоритм K-Means →</a></nav>
+<script>
+const $=id=>document.getElementById(id);
+const col=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const dpr=()=>devicePixelRatio||1;
+function setup(c){const d=dpr();c.width=c.clientWidth*d;c.height=c.clientHeight*d;const x=c.getContext('2d');x.setTransform(d,0,0,d,0,0);return x}
+/* ---- part 1 ---- */
+const c1=$('c1');let x1,W1=360,A,B,norm=false,drag=null;const RG=2;
+const reset1=()=>{A={x:.7,y:.35};B={x:.35,y:.8}};reset1();
+const S=()=>W1-56,X=v=>36+v/RG*S(),Y=v=>W1-30-v/RG*S();
+const unit=p=>{const n=Math.hypot(p.x,p.y)||1;return{x:p.x/n,y:p.y/n}};
+const va=()=>norm?unit(A):A,vb=()=>norm?unit(B):B;
+function arrow(p,color,label){x1.strokeStyle=color;x1.fillStyle=color;x1.lineWidth=2.5;x1.beginPath();x1.moveTo(X(0),Y(0));x1.lineTo(X(p.x),Y(p.y));x1.stroke();
+ x1.beginPath();x1.arc(X(p.x),Y(p.y),8,0,7);x1.fill();x1.fillStyle=col('--bg');x1.font='bold 11px system-ui';x1.textAlign='center';x1.fillText(label,X(p.x),Y(p.y)+4);x1.textAlign='left'}
+function draw1(){W1=c1.clientWidth;const c=x1;c.clearRect(0,0,W1,W1);c.strokeStyle=col('--bd');c.lineWidth=1;
+ c.beginPath();c.moveTo(X(0),Y(0));c.lineTo(X(RG),Y(0));c.moveTo(X(0),Y(0));c.lineTo(X(0),Y(RG));c.stroke();
+ c.fillStyle=col('--mut');c.font='12px system-ui';c.fillText('«матч» →',W1-70,Y(0)+16);c.fillText('↑ «закон»',4,14);
+ if(norm){c.beginPath();c.arc(X(0),Y(0),S()/RG,-Math.PI/2,0);c.setLineDash([4,4]);c.stroke();c.setLineDash([])}
+ const a=va(),b=vb();
+ c.setLineDash([6,4]);c.strokeStyle=col('--r');c.lineWidth=2;c.beginPath();c.moveTo(X(a.x),Y(a.y));c.lineTo(X(b.x),Y(b.y));c.stroke();c.setLineDash([]);
+ const a1=Math.atan2(a.y,a.x),a2=Math.atan2(b.y,b.x);c.strokeStyle=col('--g');c.lineWidth=2.5;c.beginPath();c.arc(X(0),Y(0),46,-Math.max(a1,a2),-Math.min(a1,a2));c.stroke();
+ arrow(a,col('--A'),'A');arrow(b,col('--B'),'B');
+ const na=Math.hypot(a.x,a.y),nb=Math.hypot(b.x,b.y),dot=a.x*b.x+a.y*b.y,cs=dot/(na*nb),eu=Math.hypot(a.x-b.x,a.y-b.y),mh=Math.abs(a.x-b.x)+Math.abs(a.y-b.y);
+ $('s1').innerHTML=`<p><span class="dot" style="background:var(--r)"></span>Евклидово расстояние: <b>${eu.toFixed(3)}</b></p><p>Манхэттенское: <b>${mh.toFixed(3)}</b></p>
+ <p><span class="dot" style="background:var(--g)"></span>Косинусное сходство: <b>${cs.toFixed(3)}</b></p><p>Косинусное расстояние (1 − сходство): <b>${(1-cs).toFixed(3)}</b></p>
+ <p>Угол между A и B: <b>${(Math.acos(Math.max(-1,Math.min(1,cs)))*180/Math.PI).toFixed(1)}°</b></p><p class="mut">Длины: |A| = ${na.toFixed(2)}, |B| = ${nb.toFixed(2)}.`+(norm?`<br>При единичной длине: d² = ${(eu*eu).toFixed(3)} = 2·(1 − cos) = ${(2*(1-cs)).toFixed(3)}.`:'')+'</p>'}
+function ptr(e){const r=c1.getBoundingClientRect(),sx=W1/r.width,x=(e.clientX-r.left)*sx,y=(e.clientY-r.top)*sx;return{x:Math.max(.02,(x-36)/S()*RG),y:Math.max(.02,(W1-30-y)/S()*RG),px:x,py:y}}
+c1.onpointerdown=e=>{const p=ptr(e);let best=null,bd=28;[['A',va()],['B',vb()]].forEach(([k,v])=>{const d=Math.hypot(X(v.x)-p.px,Y(v.y)-p.py);if(d<bd){bd=d;best=k}});if(best){drag=best;c1.setPointerCapture(e.pointerId)}};
+c1.onpointermove=e=>{if(!drag)return;const p=ptr(e),q={x:Math.min(RG,p.x),y:Math.min(RG,p.y)};const v=norm?unit(q):q;if(drag=='A')A=v;else B=v;draw1()};
+c1.onpointerup=()=>drag=null;
+$('dbl').onclick=()=>{B={x:Math.min(RG,B.x*2),y:Math.min(RG,B.y*2)};draw1()};
+$('nrm').onclick=()=>{norm=!norm;$('nrm').classList.toggle('on',norm);draw1()};$('r1').onclick=()=>{reset1();norm=false;$('nrm').classList.remove('on');draw1()};
+/* ---- part 2 ---- */
+const ST=['матч','гол','команд','закон','выбор','депутат','суп','рецепт','соль','добав','час','обсуд'];
+const DOCS=['Команда выиграла матч, забив два гола','Матч закончился вничью, команда забила гол','Депутаты приняли закон перед выборами','Закон о выборах обсудили депутаты','Рецепт супа: добавьте соль и воду','Суп варится час, соль добавляют в конце'];
+const tok=s=>s.toLowerCase().match(/[а-яё]+/g)||[];
+const vec=s=>{const t=tok(s);return ST.map(st=>t.filter(w=>w.startsWith(st)&&w.length<=st.length+4).length)};
+const V=DOCS.map(vec),ID=ST.map((_,j)=>Math.log((V.length+1)/(V.filter(v=>v[j]>0).length+1))+1);
+let tfidf=false,mt='c';
+const wv=v=>tfidf?v.map((x,j)=>x*ID[j]):v;
+const cosf=(a,b)=>{const n=Math.hypot(...a)*Math.hypot(...b);return n?a.reduce((s,x,i)=>s+x*b[i],0)/n:0};
+const euf=(a,b)=>Math.hypot(...a.map((x,i)=>x-b[i]));
+const sim=(a,b)=>mt=='c'?cosf(a,b):euf(a,b);
+function draw2(){const W=V.map(wv),mx=Math.max(...W.flatMap(a=>W.map(b=>euf(a,b))))||1;
+ let h='<tr><th class="l">Документ</th>'+ST.map(s=>`<th>${s}</th>`).join('')+'<th></th>'+DOCS.map((_,i)=>`<th>${i+1}</th>`).join('')+'</tr>';
+ W.forEach((a,i)=>{h+=`<tr><td class="l">${i+1}. ${DOCS[i]}</td>`+a.map(x=>`<td style="background:rgba(var(--hl),${Math.min(1,x/(tfidf?2.5:2))*.6})">${tfidf?x.toFixed(1):x}</td>`).join('')+'<td></td>'+
+  W.map((b,j)=>{const s=sim(a,b),al=mt=='c'?s:1-s/mx;return `<td style="background:rgba(var(--hl),${Math.max(0,al)*.75})">${s.toFixed(2)}</td>`}).join('')+'</tr>'});
+ $('t2').innerHTML=h;
+ const u=vec($('ud').value),uw=tfidf?u.map((x,j)=>x*ID[j]):u;
+ if(!u.some(x=>x)){$('s2').innerHTML='<p class="mut">В документе нет слов из словаря, вектор нулевой.</p>';return}
+ const r=W.map((a,i)=>({i,s:sim(uw,a)})).sort((p,q)=>mt=='c'?q.s-p.s:p.s-q.s),m=Math.max(...r.map(o=>o.s))||1;
+ $('s2').innerHTML=`<p class="mut">Вектор вашего документа: [${u.join(', ')}]. Ближайший: <b>документ ${r[0].i+1}</b>.</p>`+r.map(o=>`<div class="bar"><span style="width:90px">Документ ${o.i+1}</span><i style="width:${(mt=='c'?Math.max(0,o.s):o.s/(m||1))*50}%"></i>${o.s.toFixed(2)}</div>`).join('')}
+const tg=(a,b,fn)=>{$(a).onclick=()=>{$(a).classList.add('on');$(b).classList.remove('on');fn();draw2()}};
+tg('tf','ti',()=>tfidf=false);tg('ti','tf',()=>tfidf=true);tg('mc','me',()=>mt='c');tg('me','mc',()=>mt='e');$('ud').oninput=draw2;
+/* ---- part 3 ---- */
+const c3=$('c3');let x3,W3=360,P=[],sd=7;
+const rn=()=>{sd=(sd*16807)%2147483647;return sd/2147483647},gs=()=>Math.sqrt(-2*Math.log(rn()+1e-9))*Math.cos(2*Math.PI*rn());
+const reset3=()=>{sd=7;P=Array.from({length:14},()=>({x:Math.min(.95,Math.max(.05,.5+.09*gs())),y:Math.min(.95,Math.max(.05,.5+.09*gs()))}))};reset3();
+function draw3(){W3=c3.clientWidth;const c=x3;c.clearRect(0,0,W3,W3);const n=P.length,m={x:P.reduce((s,p)=>s+p.x,0)/n,y:P.reduce((s,p)=>s+p.y,0)/n};
+ const med=k=>{const a=P.map(p=>p[k]).sort((u,v)=>u-v);return n%2?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2},md={x:med('x'),y:med('y')},T=v=>v*W3,U=v=>(1-v)*W3;
+ c.strokeStyle=col('--bd');c.lineWidth=1;P.forEach(p=>{c.beginPath();c.moveTo(T(m.x),U(m.y));c.lineTo(T(p.x),U(p.y));c.stroke()});
+ P.forEach(p=>{c.beginPath();c.arc(T(p.x),U(p.y),5.5,0,7);c.fillStyle=col('--A');c.fill()});
+ c.strokeStyle=col('--g');c.lineWidth=2;c.beginPath();c.moveTo(T(md.x)-8,U(md.y));c.lineTo(T(md.x),U(md.y)-8);c.lineTo(T(md.x)+8,U(md.y));c.lineTo(T(md.x),U(md.y)+8);c.closePath();c.stroke();
+ c.strokeStyle=col('--r');c.lineWidth=3.5;c.beginPath();c.moveTo(T(m.x)-8,U(m.y)-8);c.lineTo(T(m.x)+8,U(m.y)+8);c.moveTo(T(m.x)+8,U(m.y)-8);c.lineTo(T(m.x)-8,U(m.y)+8);c.stroke();
+ const sse=P.reduce((s,p)=>s+(p.x-m.x)**2+(p.y-m.y)**2,0);
+ $('s3').innerHTML=`<p>Документов: <b>${n}</b></p><p><span class="dot" style="background:var(--r)"></span>Центроид: (${m.x.toFixed(3)}; ${m.y.toFixed(3)})</p><p><span class="dot" style="background:var(--g)"></span>Медиана: (${md.x.toFixed(3)}; ${md.y.toFixed(3)})</p>
+ <p>Среднее расстояние до центроида: <b>${(P.reduce((s,p)=>s+Math.hypot(p.x-m.x,p.y-m.y),0)/n).toFixed(3)}</b></p><p>SSE: <b>${sse.toFixed(3)}</b></p>`}
+c3.onclick=e=>{const r=c3.getBoundingClientRect();P.push({x:(e.clientX-r.left)/r.width,y:1-(e.clientY-r.top)/r.height});draw3()};
+$('out').onclick=()=>{P.push({x:.95,y:.95});draw3()};$('r3').onclick=()=>{reset3();draw3()};
+function fit(){x1=setup(c1);x3=setup(c3);draw1();draw2();draw3()}
+addEventListener('resize',fit);fit();
+</script></main></body></html>

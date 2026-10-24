@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Лаборатория 2: подготовка наборов данных</title>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--card:#f4f4f6;--bd:#d8d8de;--g:#12915f;--r:#d6336c;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--g:#3fcf94;--r:#f06595}}
+:root[data-theme="dark"]{--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--g:#3fcf94;--r:#f06595}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.1rem;margin:1.3em 0 .4em}
+p{margin:.4em 0}.mut{color:var(--mut);font-size:.92rem}
+.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media(max-width:680px){.three{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+button{font:inherit;padding:7px 11px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);cursor:pointer}
+button.on{border-color:var(--fg);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;align-items:center}
+label{display:block;font-size:.92rem;margin-top:8px}input[type=range]{width:100%}
+.cells{display:flex;flex-wrap:wrap;gap:2px;min-height:40px}.cells i{display:block;width:11px;height:11px;border-radius:2px}.cells i.lk{outline:2px solid var(--r);outline-offset:1px}
+.bar{display:flex;align-items:center;gap:6px;font-size:.85rem;margin:2px 0}.bar span{width:76px}.bar b{display:block;height:10px;border-radius:3px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px}
+table{border-collapse:collapse;font-size:.9rem}td,th{padding:4px 9px;border:1px solid var(--bd);text-align:left}
+ol{padding-left:1.2em;margin:.3em 0}li{margin:.3em 0}
+.grid>*,.two>*,.three>*,.g3>*{min-width:0}
+.card{max-width:100%}
+</style></head><body><main>
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab01_basics.html" style="color:var(--fg)">← 1. Классификация и кластеризация</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab03_multi.html" style="color:var(--fg)">3. Multiclass и multilabel →</a></nav>
+<h1>Лаборатория 2. Подготовка наборов данных для классификации</h1>
+<p class="mut">120 размеченных документов трёх классов (по 40 каждого), отсортированных по классам, как часто приходит выгрузка из архива. Как из них сделать обучающую, валидационную и тестовую выборки и что при этом может пойти не так?</p>
+
+<h2>1. Разбиение на выборки</h2>
+<div class="card">
+<label>Обучающая выборка: <b id="tv"></b>%<input id="tr" type="range" min="40" max="80" value="60"></label>
+<label>Валидационная: <b id="vv"></b>% (тестовая: <b id="sv"></b>%)<input id="va" type="range" min="0" max="30" value="20"></label>
+<div class="row"><button id="b1" class="on">Перемешать</button><button id="b2" class="on">Стратифицировать</button><button id="b3">Утечка: дубликаты из обучения в тесте</button><button id="b4">Новое разбиение</button></div>
+</div>
+<div class="three" id="parts"></div>
+<div class="card"><b>1-NN классификатор: точность</b> <span class="mut">(запоминает обучающие документы, на валидации и тесте оценивается)</span><div id="acc"></div></div>
+
+<h2>2. Качество разметки</h2>
+<div class="card">
+<label>Доля ошибок у каждого разметчика: <b id="nv"></b>%<input id="no" type="range" min="0" max="40" value="10"></label>
+<div id="kp"></div>
+<p class="mut">Два разметчика независимо размечают одни и те же документы, иногда ошибаясь. Согласие между ними измеряют коэффициентом Коэна κ: 1 означает полное согласие, 0 согласие на уровне случайного угадывания.</p>
+</div>
+
+<h2>Что здесь главное</h2>
+<p>Три выборки играют разные роли: на <b>обучающей</b> модель учится, на <b>валидационной</b> мы выбираем модель и гиперпараметры, <b>тестовая</b> остаётся нетронутой до самого конца и показывает честное качество. Разбиение должно быть случайным, а у редких классов представленным пропорционально (стратификация). Без перемешивания отсортированные данные дают тест из одного класса. Если же один и тот же (или почти тот же) текст попадает и в обучение, и в тест, возникает <b>утечка данных</b>: оценка завышена, а на новых текстах модель окажется хуже.</p>
+<p>Качество модели не может быть выше качества разметки. Если два человека размечают один текст по-разному, это показывает неоднозначность инструкции или самой задачи. Поэтому разметку проверяют по согласию разметчиков (κ), уточняют инструкции и разбирают спорные случаи.</p>
+
+<h2>Эксперименты</h2>
+<ol>
+<li>Выключите «Перемешать» и «Стратифицировать». Что получилось в тестовой выборке и что с точностью?</li>
+<li>Включите «Перемешать», но выключите «Стратифицировать». Много ли классов потерялось? Нажмите «Новое разбиение» несколько раз.</li>
+<li>Включите «Стратифицировать» и «Утечку». Как изменилась точность на тесте и почему она стала нереалистично высокой?</li>
+<li>Установите долю валидации 0%. Как теперь выбирать гиперпараметры, не трогая тест?</li>
+<li>Поднимайте долю ошибок разметчиков. Как падают согласие и κ, и как падает точность модели, обученной на ошибочных метках?</li>
+</ol>
+<h2>Вопросы для самопроверки</h2>
+<ol>
+<li>Почему нельзя подбирать гиперпараметры по тестовой выборке?</li>
+<li>Как защититься от утечки при работе с текстами (например, с копиями и пересказами одной новости)?</li>
+<li>Какие меры повышают согласие разметчиков?</li>
+</ol>
+
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab01_basics.html" style="color:var(--fg)">← 1. Классификация и кластеризация</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab03_multi.html" style="color:var(--fg)">3. Multiclass и multilabel →</a></nav>
+<script>
+const $=id=>document.getElementById(id);
+const CAL=['#2b7de9','#e8841a','#12915f'],CN=['Спорт','Политика','Кулинария'],CEN=[[.25,.3],[.72,.3],[.5,.75]];
+let seed=8,docs=[],shuf=true,strat=true,leak=false,rs=1;
+const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
+const gs=()=>Math.sqrt(-2*Math.log(rnd()+1e-9))*Math.cos(2*Math.PI*rnd());
+const cc=v=>Math.max(.02,Math.min(.98,v));
+const rr=()=>{rs=(rs*16807)%2147483647;return rs/2147483647};
+CEN.forEach((c,ci)=>{for(let i=0;i<40;i++)docs.push({x:cc(c[0]+.1*gs()),y:cc(c[1]+.1*gs()),c:ci})});
+const d2=(a,b)=>(a.x-b.x)**2+(a.y-b.y)**2;
+function knn(train,lab,set){return set.filter(p=>{let b=0,bd=1e9;train.forEach((o,i)=>{const d=d2(p,o);if(d<bd){bd=d;b=i}});return lab[b]==p.c}).length/(set.length||1)}
+function split(){const ptr=+$('tr').value/100,pva=+$('va').value/100;let idx=docs.map((_,i)=>i);
+ const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(rr()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+ const cut=a=>{const n=a.length,t=Math.round(n*ptr),v=Math.round(n*pva);return[a.slice(0,t),a.slice(t,t+v),a.slice(t+v)]};
+ let tr=[],va=[],te=[];
+ if(strat){[0,1,2].forEach(c=>{let a=idx.filter(i=>docs[i].c==c);if(shuf)shuffle(a);const[x,y,z]=cut(a);tr.push(...x);va.push(...y);te.push(...z)})}
+ else{if(shuf)shuffle(idx);[tr,va,te]=cut(idx)}
+ const lk=new Set();let tt=te.map(i=>docs[i]);
+ if(leak&&tr.length&&te.length){const m=Math.max(1,Math.round(te.length*.5));for(let j=0;j<m;j++){const o=docs[tr[Math.floor(rr()*tr.length)]];tt[j]={x:o.x+.002*gs(),y:o.y+.002*gs(),c:o.c,lk:1}}}
+ return{tr:tr.map(i=>docs[i]),va:va.map(i=>docs[i]),te:tt}}
+let S;
+function render(){$('tv').textContent=$('tr').value;$('vv').textContent=$('va').value;$('sv').textContent=100-$('tr').value-$('va').value;
+ S=split();const names=['Обучение','Валидация','Тест'],sets=[S.tr,S.va,S.te];
+ $('parts').innerHTML=sets.map((s,i)=>`<div class="card"><b>${names[i]}</b> <span class="mut">(${s.length})</span><div class="cells">${s.map(p=>`<i class="${p.lk?'lk':''}" style="background:${CAL[p.c]}"></i>`).join('')}</div>`+
+  [0,1,2].map(c=>{const n=s.filter(p=>p.c==c).length;return `<div class="bar"><span>${CN[c]}</span><b style="width:${s.length?n/s.length*60:0}%;background:${CAL[c]}"></b>${n}</div>`}).join('')+'</div>').join('');
+ const lab=S.tr.map(p=>p.c),aV=S.va.length?knn(S.tr,lab,S.va):null,aT=S.te.length&&S.tr.length?knn(S.tr,lab,S.te):null;
+ $('acc').innerHTML=`<p>Валидация: <b>${aV==null?'—':(aV*100).toFixed(0)+'%'}</b> &nbsp; Тест: <b>${aT==null?'—':(aT*100).toFixed(0)+'%'}</b></p>`+(S.te.length&&new Set(S.te.map(p=>p.c)).size<3?'<p class="bad" style="color:var(--r)">В тесте нет некоторых классов: оценка бессмысленна.</p>':'')+(S.tr.length&&new Set(S.tr.map(p=>p.c)).size<3?'<p style="color:var(--r)">В обучении нет некоторых классов: модель не может их предсказать.</p>':'')+(leak?'<p class="mut">Красной рамкой отмечены почти копии обучающих документов в тесте.</p>':'');
+ annot()}
+function annot(){const p=+$('no').value/100;$('nv').textContent=$('no').value;rs=777;
+ const flip=c=>rr()<p?(c+1+Math.floor(rr()*2))%3:c;
+ const A=docs.map(d=>flip(d.c)),B=docs.map(d=>flip(d.c)),n=docs.length,agree=A.filter((a,i)=>a==B[i]).length/n;
+ const pe=[0,1,2].reduce((s,c)=>s+(A.filter(a=>a==c).length/n)*(B.filter(b=>b==c).length/n),0),kappa=(agree-pe)/(1-pe+1e-9);
+ const trI=docs.map((d,i)=>S.tr.includes(d)?i:-1).filter(i=>i>=0),acc=S.tr.length?knn(trI.map(i=>docs[i]),trI.map(i=>A[i]),docs.filter(d=>!S.tr.includes(d))):0;
+ $('kp').innerHTML=`<table><tr><th>Согласие разметчиков</th><th>κ Коэна</th><th>Точность 1-NN, обученного на метках разметчика A (оценка по верным меткам)</th></tr><tr><td>${(agree*100).toFixed(0)}%</td><td>${kappa.toFixed(2)}</td><td>${(acc*100).toFixed(0)}%</td></tr></table>`}
+['tr','va'].forEach(id=>$(id).oninput=()=>{rs=1;render()});$('no').oninput=annot;
+$('b1').onclick=()=>{shuf=!shuf;$('b1').classList.toggle('on',shuf);rs=1;render()};
+$('b2').onclick=()=>{strat=!strat;$('b2').classList.toggle('on',strat);rs=1;render()};
+$('b3').onclick=()=>{leak=!leak;$('b3').classList.toggle('on',leak);rs=1;render()};
+$('b4').onclick=()=>{rs=Math.floor(Math.random()*1e6)+1;render()};
+render();
+</script></main></body></html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Лаборатория 4: линейные классификаторы</title>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--card:#f4f4f6;--bd:#d8d8de;--A:#2b7de9;--B:#e8841a;--p:#8e44ad;--l:#12915f;--s:#d6336c;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--A:#5b9cf5;--B:#f0a04b;--p:#b67ad6;--l:#3fcf94;--s:#f06595}}
+:root[data-theme="dark"]{--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--A:#5b9cf5;--B:#f0a04b;--p:#b67ad6;--l:#3fcf94;--s:#f06595}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:980px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.05rem;margin:1.2em 0 .4em}
+p{margin:.4em 0}.mut{color:var(--mut);font-size:.92rem}
+.grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px}
+@media(max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px}
+canvas{width:100%;aspect-ratio:1/1;display:block;border:1px solid var(--bd);border-radius:10px;background:var(--bg);touch-action:manipulation;cursor:crosshair}
+button{font:inherit;padding:7px 12px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);cursor:pointer}
+button.on{border-color:var(--fg);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;align-items:center}
+label{display:block;font-size:.92rem;margin-top:8px}input[type=range]{width:100%}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.88rem}
+td,th{padding:5px 6px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+ol{padding-left:1.2em;margin:.3em 0}li{margin:.3em 0}
+.grid>*,.two>*,.three>*,.g3>*{min-width:0}
+.card{max-width:100%}
+</style></head><body><main>
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab03_multi.html" style="color:var(--fg)">← 3. Multiclass и multilabel</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab05_gradient.html" style="color:var(--fg)">5. Градиентный спуск →</a></nav>
+<h1>Лаборатория 4. Линейные классификаторы и разделяющая граница</h1>
+<p class="mut">Каждый документ это точка: по горизонтали сколько раз встретилось слово «матч», по вертикали слово «закон». Три модели ищут прямую, которая отделяет спорт от политики.</p>
+<div class="grid">
+<div>
+<canvas id="cv"></canvas>
+<div class="row">
+<button id="cA" class="on"><span class="dot" style="background:var(--A)"></span>Добавлять «Спорт»</button>
+<button id="cB"><span class="dot" style="background:var(--B)"></span>Добавлять «Политика»</button>
+</div>
+<p class="mut">Нажимайте на график, чтобы добавить документ.</p>
+</div>
+<div class="card">
+<div class="row"><button id="play">▶ Play</button><button id="stp">Шаг</button><button id="rst">Сбросить модели</button></div>
+<div class="row"><button id="out">Добавить выброс</button><button id="und">Убрать последнюю точку</button><button id="nw">Новые данные</button></div>
+<label>Скорость обучения: <b id="lrv"></b><input id="lr" type="range" min="0.05" max="3" step="0.05" value="1"></label>
+<label>Регуляризация λ: <b id="rgv"></b><input id="reg" type="range" min="0" max="0.5" step="0.01" value="0.05"></label>
+<p class="mut">Эпоха: <b id="ep">0</b></p>
+<div class="tw"><table id="tb"></table></div>
+</div></div>
+
+<h2>Что происходит</h2>
+<p>Прямая задаётся формулой w₁·x + w₂·y + b = 0. Вес w₁ показывает, насколько слово «матч» тянет документ в «Спорт», а w₂ то же для «закон». Положительный вес тянет к «Спорту», отрицательный к «Политике». На каждой эпохе модель смотрит на все документы и сдвигает веса, чтобы ошибок и потерь стало меньше.</p>
+<p><span class="dot" style="background:var(--p)"></span><b>Перцептрон</b> реагирует только на ошибки: пока все точки разделены, он не двигается. <span class="dot" style="background:var(--l)"></span><b>Логистическая регрессия</b> учитывает все точки, но слабее, чем ближе они к границе. <span class="dot" style="background:var(--s)"></span><b>SVM</b> старается оставить как можно более широкий зазор (штриховые линии) между классами.</p>
+
+<h2>Эксперименты</h2>
+<ol>
+<li>Нажмите Play и следите, как прямые «ползут» от плохого начального положения к решению. Какая модель сходится первой?</li>
+<li>Нажмите «Добавить выброс»: спортивный документ, который попал в область политики. Чья граница сдвинулась сильнее?</li>
+<li>Увеличьте λ до максимума. Как меняются веса в таблице и ширина зазора у SVM?</li>
+<li>Поставьте скорость обучения на максимум. Что происходит с прямыми и с потерями?</li>
+</ol>
+<h2>Вопросы для самопроверки</h2>
+<ol>
+<li>Почему перцептрон может остановиться в разных местах при разных начальных весах, а SVM нет?</li>
+<li>Что означает отрицательный вес у слова «закон» для класса «Спорт»?</li>
+<li>Почему на реальных текстах (тысячи слов-признаков) мы не можем так же нарисовать границу?</li>
+</ol>
+
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab03_multi.html" style="color:var(--fg)">← 3. Multiclass и multilabel</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab05_gradient.html" style="color:var(--fg)">5. Градиентный спуск →</a></nav>
+<script>
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d');
+let seed=7,pts=[],cls=1,playing=false,ep=0,W=400;
+const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
+const gauss=()=>Math.sqrt(-2*Math.log(rnd()+1e-9))*Math.cos(2*Math.PI*rnd());
+const cl=v=>Math.max(-.97,Math.min(.97,v));
+const M=[{n:'Перцептрон',c:'--p'},{n:'Лог. регрессия',c:'--l'},{n:'SVM (hinge)',c:'--s'}];
+function newData(){seed=Math.floor(Math.random()*1e6)+1;pts=[];
+ for(let i=0;i<25;i++)pts.push({x:cl(.45+.3*gauss()),y:cl(-.4+.3*gauss()),c:1});
+ for(let i=0;i<25;i++)pts.push({x:cl(-.45+.3*gauss()),y:cl(.4+.3*gauss()),c:-1});
+ resetM()}
+function resetM(){M.forEach(m=>{m.w=[-.6,.5];m.b=.4});ep=0}
+const sc=(m,p)=>m.w[0]*p.x+m.w[1]*p.y+m.b;
+function stepM(){const lr=+$('lr').value,lam=+$('reg').value,n=pts.length;if(!n)return;
+ M.forEach((m,k)=>{let g0=0,g1=0,gb=0;
+  for(const p of pts){const ys=p.c*sc(m,p);let f=0;
+   if(k==0)f=ys<=0?-p.c:0;else if(k==1)f=-p.c/(1+Math.exp(ys));else f=ys<1?-p.c:0;
+   g0+=f*p.x;g1+=f*p.y;gb+=f}
+  const l=k?lam:0;
+  m.w[0]-=lr*(g0/n+l*m.w[0]);m.w[1]-=lr*(g1/n+l*m.w[1]);m.b-=lr*gb/n});
+ ep++}
+function stats(m,k){const lam=+$('reg').value;let a=0,L=0;
+ for(const p of pts){const ys=p.c*sc(m,p);if(ys>0)a++;
+  L+=k==0?Math.max(0,-ys):k==1?Math.log(1+Math.exp(-ys)):Math.max(0,1-ys)}
+ L/=pts.length||1;if(k)L+=lam/2*(m.w[0]**2+m.w[1]**2);
+ return{acc:a/(pts.length||1),L}}
+const X=x=>(x+1)/2*W,Y=y=>(1-y)/2*W;
+const col=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function line(m,off,color,dash){const n2=m.w[0]**2+m.w[1]**2;if(n2<1e-9)return;
+ const k=(off-m.b)/n2,p0=[k*m.w[0],k*m.w[1]],nn=Math.sqrt(n2),d=[-m.w[1]/nn,m.w[0]/nn];
+ ctx.beginPath();ctx.setLineDash(dash?[6,5]:[]);ctx.strokeStyle=color;ctx.lineWidth=dash?1.2:2.4;
+ ctx.moveTo(X(p0[0]-4*d[0]),Y(p0[1]-4*d[1]));ctx.lineTo(X(p0[0]+4*d[0]),Y(p0[1]+4*d[1]));ctx.stroke();ctx.setLineDash([])}
+function draw(){ctx.clearRect(0,0,W,W);
+ ctx.strokeStyle=col('--bd');ctx.lineWidth=1;
+ ctx.beginPath();ctx.moveTo(X(-1),Y(0));ctx.lineTo(X(1),Y(0));ctx.moveTo(X(0),Y(-1));ctx.lineTo(X(0),Y(1));ctx.stroke();
+ ctx.fillStyle=col('--mut');ctx.font='12px system-ui';
+ ctx.fillText('«матч» →',W-70,Y(0)-6);ctx.fillText('↑ «закон»',X(0)+6,14);
+ M.forEach((m,k)=>{if(k==2){line(m,1,col(m.c),1);line(m,-1,col(m.c),1)}line(m,0,col(m.c))});
+ for(const p of pts){ctx.beginPath();ctx.arc(X(p.x),Y(p.y),5.5,0,7);
+  ctx.fillStyle=col(p.c>0?'--A':'--B');ctx.globalAlpha=.9;ctx.fill();ctx.globalAlpha=1;
+  ctx.strokeStyle=col('--bg');ctx.lineWidth=1.2;ctx.stroke()}
+ $('ep').textContent=ep;$('lrv').textContent=$('lr').value;$('rgv').textContent=$('reg').value;
+ let h='<tr><th>Модель</th><th>Точность</th><th>Потери</th><th>w₁ матч</th><th>w₂ закон</th></tr>';
+ M.forEach((m,k)=>{const s=stats(m,k);
+  h+=`<tr><td><span class="dot" style="background:${col(m.c)}"></span>${m.n}</td><td>${(s.acc*100).toFixed(0)}%</td><td>${s.L.toFixed(3)}</td><td>${m.w[0].toFixed(2)}</td><td>${m.w[1].toFixed(2)}</td></tr>`});
+ $('tb').innerHTML=h}
+function fit(){const r=cv.clientWidth||400,d=window.devicePixelRatio||1;W=r;cv.width=r*d;cv.height=r*d;ctx.setTransform(d,0,0,d,0,0);draw()}
+function loop(){if(playing){stepM();stepM();draw()}requestAnimationFrame(loop)}
+cv.addEventListener('click',e=>{const r=cv.getBoundingClientRect();
+ pts.push({x:cl((e.clientX-r.left)/r.width*2-1),y:cl(1-(e.clientY-r.top)/r.height*2),c:cls});draw()});
+$('cA').onclick=()=>{cls=1;$('cA').classList.add('on');$('cB').classList.remove('on')};
+$('cB').onclick=()=>{cls=-1;$('cB').classList.add('on');$('cA').classList.remove('on')};
+$('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'⏸ Пауза':'▶ Play'};
+$('stp').onclick=()=>{stepM();draw()};
+$('rst').onclick=()=>{resetM();draw()};
+$('out').onclick=()=>{pts.push({x:-.75,y:.8,c:1});draw()};
+$('und').onclick=()=>{pts.pop();draw()};
+$('nw').onclick=()=>{newData();draw()};
+$('lr').oninput=$('reg').oninput=draw;
+addEventListener('resize',fit);
+newData();fit();loop();
+</script></main></body></html>

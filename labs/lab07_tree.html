@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Лаборатория 7: решающие деревья</title>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--card:#f4f4f6;--bd:#d8d8de;--A:#2b7de9;--B:#e8841a;--C:#12915f;--r:#d6336c;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--A:#5b9cf5;--B:#f0a04b;--C:#3fcf94;--r:#f06595}}
+:root[data-theme="dark"]{--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--A:#5b9cf5;--B:#f0a04b;--C:#3fcf94;--r:#f06595}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.05rem;margin:1.2em 0 .4em}
+p{margin:.4em 0}.mut{color:var(--mut);font-size:.92rem}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media(max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+canvas{width:100%;display:block;border:1px solid var(--bd);border-radius:10px;background:var(--bg)}
+#pl{aspect-ratio:1/1}#tr{aspect-ratio:4/3;cursor:pointer}#gn,#ac{aspect-ratio:2/1}
+button{font:inherit;padding:7px 12px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);cursor:pointer}
+button.on{border-color:var(--fg);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;align-items:center}
+label{display:block;font-size:.92rem;margin-top:8px}input[type=range]{width:100%}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+ol{padding-left:1.2em;margin:.3em 0}li{margin:.3em 0}
+.grid>*,.two>*,.three>*,.g3>*{min-width:0}
+.card{max-width:100%}
+</style></head><body><main>
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab06_knn.html" style="color:var(--fg)">← 6. Метод k ближайших соседей</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab08_forest.html" style="color:var(--fg)">8. Случайный лес →</a></nav>
+<h1>Лаборатория 7. Решающие деревья</h1>
+<p class="mut">Каждый документ это точка: по горизонтали частота слова «матч», по вертикали частота слова «закон». Дерево по шагам режет плоскость вертикальными и горизонтальными линиями так, чтобы в каждом куске остался почти один класс. Нажимайте на узлы дерева, чтобы увидеть их область и качество разреза.</p>
+<div class="grid">
+<div>
+<canvas id="pl"></canvas>
+<p class="mut"><span class="dot" style="background:var(--A)"></span>Спорт &nbsp;<span class="dot" style="background:var(--B)"></span>Политика &nbsp;<span class="dot" style="background:var(--C)"></span>Кухня</p>
+<div class="card">
+<div class="row"><button id="st">Сделать разбиение</button><button id="al">Растить до конца</button><button id="rs">Сбросить</button></div>
+<div class="row"><span class="mut">Критерий:</span><button id="cg" class="on">Gini</button><button id="ce">Энтропия</button></div>
+<label>Максимальная глубина: <b id="mdv"></b><input id="md" type="range" min="1" max="8" value="6"></label>
+<label>Минимум документов в листе: <b id="mlv"></b><input id="ml" type="range" min="1" max="10" value="1"></label>
+<div class="row"><button id="nz">Добавить шум</button><button id="nw">Новые данные</button></div>
+</div></div>
+<div>
+<div class="card"><b>Дерево решений</b><canvas id="tr"></canvas><p id="inf" class="mut"></p></div>
+<div class="card"><b>Выигрыш от разреза выбранного узла</b><canvas id="gn"></canvas>
+<p class="mut"><span class="dot" style="background:var(--fg)"></span>по «матч» &nbsp;<span class="dot" style="background:var(--r)"></span>по «закон» &nbsp;(по горизонтали порог)</p></div>
+<div class="card"><b>Точность по мере роста дерева</b><canvas id="ac"></canvas>
+<p class="mut"><span class="dot" style="background:var(--r)"></span>обучающие &nbsp;<span class="dot" style="background:var(--fg)"></span>новые (тест) &nbsp;(по горизонтали число разбиений)</p></div>
+</div></div>
+
+<h2>Что происходит</h2>
+<p>Дерево задаёт вопросы вида «частота слова ≤ порога?». Для каждого узла оно перебирает все признаки и пороги и выбирает тот, после которого «нечистота» (Gini или энтропия) в двух частях падает сильнее всего. Эта разница и есть выигрыш, график которого показан справа. Рост жадный: на каждом шаге выбирается лучший разрез сейчас, без заглядывания вперёд.</p>
+<p>Путь от корня к листу читается как правило: «если «матч» ≤ 0.4 и «закон» > 0.5, то Политика». Поэтому деревья легко объяснить, но без ограничений они вырастают до тех пор, пока каждая шумная точка не получит свой лист. Глубина и минимум документов в листе ограничивают рост.</p>
+
+<h2>Эксперименты</h2>
+<ol>
+<li>Несколько раз нажмите «Сделать разбиение». Какой признак выбран первым и почему именно этот порог (смотрите график выигрыша)?</li>
+<li>Нажмите на разные узлы дерева. Как меняется область на плоскости и выигрыш?</li>
+<li>Нажмите «Растить до конца» при глубине 8 и минимуме 1. Что происходит с точностью на обучающих и на новых данных?</li>
+<li>Увеличьте минимум документов в листе до 5–8. Как изменились границы и точность на тесте?</li>
+<li>Переключите Gini и энтропию. Одинаковы ли деревья?</li>
+</ol>
+<h2>Вопросы для самопроверки</h2>
+<ol>
+<li>Почему границы дерева всегда параллельны осям и чем это отличается от линейных моделей из лаборатории 4?</li>
+<li>Почему жадный выбор лучшего разреза не гарантирует лучшее дерево в целом?</li>
+<li>Как по картинке понять, что дерево переобучилось?</li>
+</ol>
+
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab06_knn.html" style="color:var(--fg)">← 6. Метод k ближайших соседей</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab08_forest.html" style="color:var(--fg)">8. Случайный лес →</a></nav>
+<script>
+const $=id=>document.getElementById(id);
+const C={pl:$('pl'),tr:$('tr'),gn:$('gn'),ac:$('ac')},X={};for(const k in C)X[k]=C[k].getContext('2d');
+const CN=['Спорт','Политика','Кухня'],CC=['--A','--B','--C'],CEN=[[.66,.34],[.34,.66],[.3,.3]],FN=['«матч»','«закон»'],KEY=['x','y'];
+let seed=3,train=[],test=[],crit='g',tree,sel,splits=0,curve=null,W=400,nodesPos=[];
+const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
+const gs=()=>Math.sqrt(-2*Math.log(rnd()+1e-9))*Math.cos(2*Math.PI*rnd());
+const cl=v=>Math.max(.02,Math.min(.98,v));
+const col=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const mk=()=>{const a=[];CEN.forEach((c,ci)=>{for(let i=0;i<40;i++)a.push({x:cl(c[0]+.16*gs()),y:cl(c[1]+.16*gs()),c:ci})});return a};
+const arg=v=>v.indexOf(Math.max(...v));
+const cnt=idx=>{const c=[0,0,0];idx.forEach(i=>c[train[i].c]++);return c};
+function imp(c){const n=c[0]+c[1]+c[2];if(!n)return 0;
+ return crit=='g'?1-c.reduce((a,v)=>a+(v/n)**2,0):-c.reduce((a,v)=>a+(v?v/n*Math.log2(v/n):0),0)}
+function best(idx,minL,all){const n=idx.length,tot=cnt(idx),I=imp(tot),list=[[],[]];let b=null;
+ for(let f=0;f<2;f++){const k=KEY[f],s=[...idx].sort((u,v)=>train[u][k]-train[v][k]),L=[0,0,0];
+  for(let i=1;i<n;i++){L[train[s[i-1]].c]++;const v0=train[s[i-1]][k],v1=train[s[i]][k];
+   if(i<minL||n-i<minL||v0==v1)continue;
+   const R=tot.map((t,j)=>t-L[j]),g=I-(i/n*imp(L)+(n-i)/n*imp(R)),t=(v0+v1)/2;
+   list[f].push([t,g]);if(!b||g>b.g)b={f,t,g}}}
+ return all?{b,list}:b}
+const mkn=(idx,depth,b,par)=>({idx,depth,b,par,cnt:cnt(idx)});
+function leaves(n=tree,a=[]){if(n.sp){leaves(n.l,a);leaves(n.r,a)}else a.push(n);return a}
+function grow(){let bn=null,bs=0;
+ for(const n of leaves()){if(n.depth>=+$('md').value||n.idx.length<2||imp(n.cnt)==0)continue;
+  if(n.cd===undefined)n.cd=best(n.idx,+$('ml').value,0);if(!n.cd||n.cd.g<=1e-9)continue;
+  const s=n.cd.g*n.idx.length;if(s>bs){bs=s;bn=n}}
+ if(!bn)return false;const{f,t}=bn.cd,k=KEY[f];bn.sp={f,t};
+ const Li=bn.idx.filter(i=>train[i][k]<=t),Ri=bn.idx.filter(i=>train[i][k]>t),[x0,x1,y0,y1]=bn.b;
+ bn.l=mkn(Li,bn.depth+1,f?[x0,x1,y0,t]:[x0,t,y0,y1],bn);bn.r=mkn(Ri,bn.depth+1,f?[x0,x1,t,y1]:[t,x1,y0,y1],bn);
+ splits++;return true}
+function rebuild(n){tree=mkn(train.map((_,i)=>i),0,[0,1,0,1],null);splits=0;for(let i=0;i<n&&grow();i++);sel=tree;curve=null}
+function pred(p){let n=tree;while(n.sp)n=p[KEY[n.sp.f]]<=n.sp.t?n.l:n.r;return arg(n.cnt)}
+const acc=s=>s.filter(p=>pred(p)==p.c).length/s.length;
+function calcCurve(){const want=splits,a=[];tree=mkn(train.map((_,i)=>i),0,[0,1,0,1],null);splits=0;a.push([acc(train),acc(test)]);
+ while(splits<60&&grow())a.push([acc(train),acc(test)]);rebuild(want);curve=a}
+function newData(){seed=Math.floor(Math.random()*1e6)+1;train=mk();test=mk();rebuild(0)}
+function lay(){const L=leaves();L.forEach((n,i)=>n.px=(i+.5)/L.length);
+ (function up(n){if(n.sp){up(n.l);up(n.r);n.px=(n.l.px+n.r.px)/2}})(tree);return L}
+function drawPl(){const c=X.pl,P=v=>v*W;c.clearRect(0,0,W,W);
+ for(const n of leaves()){const[x0,x1,y0,y1]=n.b;c.globalAlpha=.22;c.fillStyle=col(CC[arg(n.cnt)]);c.fillRect(P(x0),P(1-y1),P(x1-x0),P(y1-y0));c.globalAlpha=1}
+ c.strokeStyle=col('--fg');c.lineWidth=1.6;
+ (function ln(n){if(!n.sp)return;const[x0,x1,y0,y1]=n.b,t=n.sp.t;c.beginPath();
+  if(n.sp.f==0){c.moveTo(P(t),P(1-y0));c.lineTo(P(t),P(1-y1))}else{c.moveTo(P(x0),P(1-t));c.lineTo(P(x1),P(1-t))}c.stroke();ln(n.l);ln(n.r)})(tree);
+ const[a,b,d,e]=sel.b;c.setLineDash([6,4]);c.lineWidth=3;c.strokeRect(P(a),P(1-e),P(b-a),P(e-d));c.setLineDash([]);
+ train.forEach(p=>{c.beginPath();c.arc(P(p.x),P(1-p.y),4.5,0,7);c.fillStyle=col(CC[p.c]);c.fill();c.strokeStyle=col('--bg');c.lineWidth=1;c.stroke()});
+ c.fillStyle=col('--mut');c.font='12px system-ui';c.fillText('«матч» →',W-62,W-6);c.fillText('↑ «закон»',6,14)}
+function drawTr(){const c=X.tr,w=C.tr.clientWidth,h=C.tr.clientHeight,L=lay(),md=Math.max(2,...L.map(n=>n.depth)),r=Math.min(16,w/L.length/2.2);
+ c.clearRect(0,0,w,h);nodesPos=[];const pos=n=>[n.px*w,(n.depth+.5)/(md+1)*h];
+ (function ed(n){if(!n.sp)return;const[a,b]=pos(n);[n.l,n.r].forEach(m=>{const[x,y]=pos(m);c.beginPath();c.strokeStyle=col('--bd');c.lineWidth=1.5;c.moveTo(a,b);c.lineTo(x,y);c.stroke();ed(m)})})(tree);
+ (function nd(n){const[x,y]=pos(n);nodesPos.push([x,y,n]);c.beginPath();c.arc(x,y,r,0,7);
+  if(n.sp){c.fillStyle=col('--bg')}else{c.fillStyle=col(CC[arg(n.cnt)])}c.fill();c.lineWidth=n==sel?3.5:1.5;c.strokeStyle=col('--fg');c.stroke();
+  if(n.sp&&L.length<=10){c.fillStyle=col('--fg');c.font='11px system-ui';c.textAlign='center';c.fillText(FN[n.sp.f]+'≤'+n.sp.t.toFixed(2),x,y-r-4);c.textAlign='left'}
+  if(n.sp){nd(n.l);nd(n.r)}})(tree);
+ const o=sel,cd=best(o.idx,+$('ml').value,0),nm=crit=='g'?'Gini':'энтропия';
+ $('inf').innerHTML=`Узел: документов ${o.idx.length}, классы: Спорт ${o.cnt[0]}, Политика ${o.cnt[1]}, Кухня ${o.cnt[2]}; ${nm} = ${imp(o.cnt).toFixed(3)}. `+(o.sp?`Разрез: ${FN[o.sp.f]} ≤ ${o.sp.t.toFixed(2)}.`:cd&&cd.g>1e-9?`Лист. Лучший возможный разрез: ${FN[cd.f]} ≤ ${cd.t.toFixed(2)} (выигрыш ${cd.g.toFixed(3)}), но он не сделан.`:'Лист: разрезов с пользой нет.')}
+function drawGn(){const c=X.gn,w=C.gn.clientWidth,h=w/2;c.clearRect(0,0,w,h);
+ c.strokeStyle=col('--bd');c.strokeRect(.5,.5,w-1,h-1);const q=best(sel.idx,+$('ml').value,1);
+ const mx=Math.max(.01,...q.list.flat().map(v=>v[1]));c.font='11px system-ui';c.fillStyle=col('--mut');
+ if(!q.list[0].length&&!q.list[1].length){c.fillText('нет допустимых разрезов',10,h/2);return}
+ const xs=t=>8+t*(w-16),ys=g=>h-10-g/mx*(h-24);
+ q.list.forEach((l,f)=>{c.beginPath();c.strokeStyle=col(f?'--r':'--fg');c.lineWidth=2;l.forEach(([t,g],i)=>i?c.lineTo(xs(t),ys(g)):c.moveTo(xs(t),ys(g)));c.stroke()});
+ if(q.b){c.beginPath();c.arc(xs(q.b.t),ys(q.b.g),6,0,7);c.fillStyle=col('--C');c.fill();c.fillStyle=col('--fg');c.fillText('лучший: '+FN[q.b.f]+' ≤ '+q.b.t.toFixed(2),Math.min(xs(q.b.t)+8,w-130),Math.max(14,ys(q.b.g)))}}
+function drawAc(){if(!curve)calcCurve();const c=X.ac,w=C.ac.clientWidth,h=w/2,n=curve.length,lo=.3;c.clearRect(0,0,w,h);
+ c.strokeStyle=col('--bd');c.strokeRect(.5,.5,w-1,h-1);c.fillStyle=col('--mut');c.font='11px system-ui';c.fillText('100%',3,12);c.fillText('30%',3,h-4);
+ const xs=i=>16+i/Math.max(1,n-1)*(w-24),ys=v=>h-6-(v-lo)/(1-lo)*(h-18);
+ [[0,'--r'],[1,'--fg']].forEach(([j,cc])=>{c.beginPath();c.strokeStyle=col(cc);c.lineWidth=2;curve.forEach((a,i)=>i?c.lineTo(xs(i),ys(a[j])):c.moveTo(xs(i),ys(a[j])));c.stroke()});
+ c.setLineDash([4,4]);c.strokeStyle=col('--fg');c.beginPath();c.moveTo(xs(Math.min(splits,n-1)),4);c.lineTo(xs(Math.min(splits,n-1)),h-4);c.stroke();c.setLineDash([]);
+ const a=curve[Math.min(splits,n-1)];c.fillStyle=col('--fg');c.textAlign='right';c.fillText(`сейчас: обучающие ${(a[0]*100).toFixed(0)}%, тест ${(a[1]*100).toFixed(0)}%`,w-6,h-14);c.textAlign='left'}
+function draw(){$('mdv').textContent=$('md').value;$('mlv').textContent=$('ml').value;drawPl();drawTr();drawGn();drawAc()}
+function fit(){const d=devicePixelRatio||1;for(const k in C){C[k].width=C[k].clientWidth*d;C[k].height=C[k].clientHeight*d;X[k].setTransform(d,0,0,d,0,0)}W=C.pl.clientWidth;draw()}
+C.tr.onclick=e=>{const r=C.tr.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let b=null,bd=1e9;
+ nodesPos.forEach(([a,c,n])=>{const d=Math.hypot(a-x,c-y);if(d<bd){bd=d;b=n}});if(b&&bd<30){sel=b;draw()}};
+const re=()=>{rebuild(splits);draw()};
+$('st').onclick=()=>{grow();curve=null;draw()};$('al').onclick=()=>{while(grow());curve=null;draw()};
+$('rs').onclick=()=>{rebuild(0);draw()};
+$('cg').onclick=()=>{crit='g';$('cg').classList.add('on');$('ce').classList.remove('on');re()};
+$('ce').onclick=()=>{crit='e';$('ce').classList.add('on');$('cg').classList.remove('on');re()};
+$('md').oninput=$('ml').oninput=re;
+$('nz').onclick=()=>{for(let i=0;i<8;i++)train.push({x:cl(rnd()),y:cl(rnd()),c:Math.floor(rnd()*3)});re()};
+$('nw').onclick=()=>{newData();draw()};
+addEventListener('resize',fit);newData();fit();
+</script></main></body></html>

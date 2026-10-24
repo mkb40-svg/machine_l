@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Лаборатория 15: тематическое моделирование (LDA)</title>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--card:#f4f4f6;--bd:#d8d8de;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f}}
+:root[data-theme="dark"]{--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.05rem;margin:1.2em 0 .4em}
+p{margin:.4em 0}.mut{color:var(--mut);font-size:.92rem}
+.grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px}
+@media(max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+button{font:inherit;padding:7px 11px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);cursor:pointer}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;align-items:center}
+label{display:block;font-size:.92rem;margin-top:8px}input[type=range]{width:100%}
+.doc{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)}
+.doc .n{width:22px;color:var(--mut);font-size:.85rem}.doc .w{flex:1;display:flex;flex-wrap:wrap;gap:4px}
+.chip{padding:1px 7px;border-radius:10px;color:#fff;font-size:.88rem;border:2px solid transparent}.chip.ch{border-color:var(--fg)}
+.th{width:90px;height:14px;display:flex;border-radius:4px;overflow:hidden;background:var(--bd)}.th i{display:block;height:100%}
+.tp{margin-bottom:10px}.tp b{display:inline-block;padding:1px 9px;border-radius:10px;color:#fff;margin-bottom:4px}
+.bar{display:flex;align-items:center;gap:8px;font-size:.88rem;margin:2px 0}.bar span{width:84px}.bar i{display:block;height:11px;border-radius:4px}
+ol{padding-left:1.2em;margin:.3em 0}li{margin:.3em 0}
+.grid>*,.two>*,.three>*,.g3>*{min-width:0}
+.card{max-width:100%}
+</style></head><body><main>
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab14_quality.html" style="color:var(--fg)">← 14. Оценка качества кластеризации</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><span></span></nav>
+<h1>Лаборатория 15. Тематическое моделирование: LDA</h1>
+<p class="mut">Тематическая модель сама находит темы в коллекции документов. Каждое слово получает «метку темы», и в процессе обучения метки перестраиваются так, чтобы слова, которые часто встречаются вместе, оказались в одной теме. Здесь работает настоящий LDA (сэмплирование по Гиббсу) на маленьком корпусе из 12 документов. Документы предварительно лемматизированы.</p>
+<div class="card">
+<div class="row"><button id="pl">▶ Play</button><button id="st">Одна итерация</button><button id="rs">Сначала</button><span class="mut">Итерация: <b id="it">0</b></span></div>
+<label>Число тем K: <b id="kv"></b><input id="K" type="range" min="2" max="5" value="3"></label>
+<label>α (насколько документ может смешивать темы): <b id="av"></b><input id="a" type="range" min="1" max="30" value="5"></label>
+<label>β (насколько тема может смешивать слова): <b id="bv"></b><input id="b" type="range" min="1" max="50" value="10"></label>
+</div>
+<div class="grid">
+<div class="card"><b>Документы</b> <span class="mut">(цвет слова это текущая тема, обводка значит тема слова только что сменилась; справа доли тем в документе)</span><div id="docs"></div></div>
+<div class="card"><b>Найденные темы</b> <span class="mut">(самые вероятные слова)</span><div id="tops"></div></div>
+</div>
+
+<h2>Что происходит</h2>
+<p>LDA предполагает, что каждый документ это смесь нескольких тем, а каждая тема это распределение вероятностей по словам. В начале каждому слову назначается случайная тема. На каждой итерации для каждого слова повторяется выбор темы: тема тем вероятнее, чем больше <b>в этом документе</b> уже слов этой темы и чем чаще <b>во всём корпусе</b> это слово встречается в этой теме. Слова, которые идут вместе, постепенно «притягиваются» друг к другу. Темы получают смысл только от человека: алгоритм лишь группирует слова, а название вы даёте сами, глядя на самые вероятные слова.</p>
+<p>Параметр α управляет смешением тем в документе: маленький α даёт «чистые» документы, большой размазывает их по темам. Параметр β делает то же для слов в теме. Документы 7, 8 и 9 в корпусе намеренно смешанные (политика с командой, команда с бюджетом, чемпионат с рецептом): посмотрите, как LDA это показывает.</p>
+
+<h2>Эксперименты</h2>
+<ol>
+<li>Нажмите «Сначала», затем «Одна итерация» несколько раз. Как быстро слова собираются по темам? Какие слова меняют тему последними?</li>
+<li>Поставьте K = 3 и дождитесь стабилизации. Совпадают ли темы с ожидаемыми (спорт, политика, кулинария)? Как бы вы их назвали?</li>
+<li>Поставьте K = 2, потом K = 5. Как меняются темы: объединяются или дробятся?</li>
+<li>Уменьшите α до минимума, затем увеличьте. Как меняются полоски долей тем у смешанных документов 7, 8, 9?</li>
+<li>Нажмите «Сначала» несколько раз. Получаются ли каждый раз те же темы и тот же порядок цветов?</li>
+</ol>
+<h2>Вопросы для самопроверки</h2>
+<ol>
+<li>Чем тематическое моделирование отличается от K-Means: что в нём означает «документ принадлежит нескольким темам»?</li>
+<li>Почему цвет и номер темы при каждом запуске разные, а смысл тем сохраняется?</li>
+<li>Зачем перед LDA нужна лемматизация и удаление частых слов?</li>
+</ol>
+
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab14_quality.html" style="color:var(--fg)">← 14. Оценка качества кластеризации</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><span></span></nav>
+<script>
+const $=id=>document.getElementById(id);
+const DOCS=['матч команда гол игрок тренер чемпионат год','команда игрок гол победа матч сезон год','закон депутат выборы партия голосование президент год','президент партия выборы закон реформа депутат год','суп рецепт соль мясо готовить духовка год','мясо духовка рецепт соль овощи готовить год','депутат закон бюджет реформа команда игрок год','тренер команда бюджет закон чемпионат реформа год','повар чемпионат рецепт мясо соль готовить год','выборы голосование партия президент победа депутат год','игрок тренер победа сезон гол матч год','овощи суп духовка готовить рецепт соль год'].map(s=>s.split(' '));
+const PAL=['#2b7de9','#e8841a','#12915f','#d6336c','#8e44ad'];
+const vocab=[...new Set(DOCS.flat())],V=vocab.length,wid=DOCS.map(d=>d.map(w=>vocab.indexOf(w)));
+let K=3,al=.5,be=.1,z,ndk,nkw,nk,it=0,ch,playing=false,fc=0,seed=4;
+const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
+function init(){K=+$('K').value;seed=Math.floor(Math.random()*1e6)+1;z=wid.map(d=>d.map(()=>Math.floor(rnd()*K)));ndk=DOCS.map(()=>Array(K).fill(0));nkw=Array.from({length:K},()=>Array(V).fill(0));nk=Array(K).fill(0);
+ wid.forEach((d,i)=>d.forEach((w,j)=>{const t=z[i][j];ndk[i][t]++;nkw[t][w]++;nk[t]++}));it=0;ch=wid.map(d=>d.map(()=>false))}
+function sweep(){wid.forEach((d,i)=>d.forEach((w,j)=>{const o=z[i][j];ndk[i][o]--;nkw[o][w]--;nk[o]--;
+ const p=[];let s=0;for(let t=0;t<K;t++){const v=(ndk[i][t]+al)*(nkw[t][w]+be)/(nk[t]+V*be);p.push(v);s+=v}
+ let u=rnd()*s,t=0;while(t<K-1&&u>p[t]){u-=p[t];t++}z[i][j]=t;ndk[i][t]++;nkw[t][w]++;nk[t]++;ch[i][j]=t!=o}));it++}
+function render(){$('it').textContent=it;$('kv').textContent=K;$('av').textContent=al.toFixed(2);$('bv').textContent=be.toFixed(2);
+ $('docs').innerHTML=DOCS.map((d,i)=>`<div class="doc"><span class="n">${i+1}</span><div class="w">${d.map((w,j)=>`<span class="chip${ch[i][j]?' ch':''}" style="background:${PAL[z[i][j]]}">${w}</span>`).join('')}</div><div class="th">${ndk[i].map((n,t)=>`<i style="width:${n/d.length*100}%;background:${PAL[t]}"></i>`).join('')}</div></div>`).join('');
+ $('tops').innerHTML=nkw.map((row,t)=>{const ph=row.map((n,w)=>[(n+be)/(nk[t]+V*be),w]).sort((a,b)=>b[0]-a[0]).slice(0,6),mx=ph[0][0];
+  return `<div class="tp"><b style="background:${PAL[t]}">Тема ${t+1}: «${vocab[ph[0][1]]}»</b>`+ph.map(([p,w])=>`<div class="bar"><span>${vocab[w]}</span><i style="width:${p/mx*60}%;background:${PAL[t]}"></i>${(p*100).toFixed(0)}%</div>`).join('')+'</div>'}).join('')}
+$('K').oninput=()=>{init();render()};
+$('a').oninput=e=>{al=e.target.value/10;render()};$('b').oninput=e=>{be=e.target.value/100;render()};
+$('st').onclick=()=>{sweep();render()};$('rs').onclick=()=>{init();render()};
+$('pl').onclick=()=>{playing=!playing;$('pl').textContent=playing?'⏸ Пауза':'▶ Play'};
+(function tick(){if(playing&&++fc%22==0){sweep();render()}requestAnimationFrame(tick)})();
+init();render();
+</script></main></body></html>

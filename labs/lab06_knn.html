@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Лаборатория 6: метод k ближайших соседей</title>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--card:#f4f4f6;--bd:#d8d8de;--A:#2b7de9;--B:#e8841a;--C:#12915f;--r:#d6336c;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--A:#5b9cf5;--B:#f0a04b;--C:#3fcf94;--r:#f06595}}
+:root[data-theme="dark"]{--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--A:#5b9cf5;--B:#f0a04b;--C:#3fcf94;--r:#f06595}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:.2em 0}h2{font-size:1.05rem;margin:1.2em 0 .4em}
+p{margin:.4em 0}.mut{color:var(--mut);font-size:.92rem}
+.grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px}
+@media(max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+canvas{width:100%;display:block;border:1px solid var(--bd);border-radius:10px;background:var(--bg)}
+#cv{aspect-ratio:1/1;cursor:crosshair;touch-action:none}#ac{aspect-ratio:2/1}
+button{font:inherit;padding:7px 12px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);cursor:pointer}
+button.on{border-color:var(--fg);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;align-items:center}
+label{display:block;font-size:.92rem;margin-top:8px}input[type=range]{width:100%}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+.bar{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:.9rem}
+.bar i{display:block;height:14px;border-radius:4px;min-width:2px}
+ol{padding-left:1.2em;margin:.3em 0}li{margin:.3em 0}
+.grid>*,.two>*,.three>*,.g3>*{min-width:0}
+.card{max-width:100%}
+</style></head><body><main>
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab05_gradient.html" style="color:var(--fg)">← 5. Градиентный спуск</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab07_tree.html" style="color:var(--fg)">7. Решающие деревья →</a></nav>
+<h1>Лаборатория 6. Классификация текстов методом k ближайших соседей</h1>
+<p class="mut">Каждый документ это точка на плоскости (условная 2D-проекция векторов TF-IDF). Перетащите звезду ★ (новый документ) в любое место: он получит класс по голосованию k ближайших соседей. Цветом фона показано, какой класс получила бы каждая точка плоскости.</p>
+<div class="grid">
+<div><canvas id="cv"></canvas>
+<p class="mut"><span class="dot" style="background:var(--A)"></span>Спорт &nbsp;<span class="dot" style="background:var(--B)"></span>Политика &nbsp;<span class="dot" style="background:var(--C)"></span>Кухня</p></div>
+<div>
+<div class="card">
+<label>Число соседей k: <b id="kv"></b><input id="k" type="range" min="1" max="25" value="5"></label>
+<div class="row"><span class="mut">Расстояние:</span><button id="me" class="on">Евклидово</button><button id="mc">Косинусное</button></div>
+<div class="row"><span class="mut">Голоса:</span><button id="wu" class="on">Равные</button><button id="wd">По близости</button></div>
+<div class="row"><button id="rg" class="on">Области решения</button><button id="nz">Добавить шум</button><button id="nw">Новые данные</button></div>
+</div>
+<div class="card"><b id="pr"></b><div id="vt"></div></div>
+<div class="card"><b>Точность в зависимости от k</b><canvas id="ac"></canvas>
+<p class="mut"><span class="dot" style="background:var(--r)"></span>на обучающих (сам себе сосед)  <span class="dot" style="background:var(--fg)"></span>честная оценка (без самого документа)</p></div>
+</div></div>
+
+<h2>Что происходит</h2>
+<p>У метода kNN нет обучения в обычном смысле: он просто запоминает все документы. Чтобы классифицировать новый, он ищет k самых близких, и они голосуют. Круг (или лучи при косинусной мере) на графике показывает, где находятся эти k соседей. При k = 1 граница получается рваной, и каждая «шумная» точка создаёт вокруг себя свой островок. Большое k сглаживает границу, но слишком большое стирает мелкие классы.</p>
+<p>Косинусное расстояние сравнивает только направление вектора, а не его длину. Поэтому для текстов оно полезно: короткий и длинный документ на одну тему получат близкие направления. В этой лаборатории несколько документов каждого класса «короткие», они лежат у начала координат.</p>
+
+<h2>Эксперименты</h2>
+<ol>
+<li>Поставьте k = 1 и добавьте шум несколько раз. Как выглядят области решения? Что с красной кривой точности и что с серой?</li>
+<li>Постепенно увеличивайте k. При каком k честная точность максимальна?</li>
+<li>Поставьте звезду рядом с началом координат и переключите расстояние между евклидовым и косинусным. Меняется ли предсказание? Почему?</li>
+<li>Включите голоса «по близости». Когда они помогают, если рядом с границей много соседей разных классов?</li>
+</ol>
+<h2>Вопросы для самопроверки</h2>
+<ol>
+<li>Почему точность на обучающих данных при k = 1 всегда 100% и почему это ничего не значит?</li>
+<li>Почему для kNN на текстах важно приводить векторы к одной длине или использовать косинус?</li>
+<li>Что будет со скоростью классификации, если в корпусе миллион документов, и как это связано с отсутствием «обучения»?</li>
+</ol>
+
+<nav style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem;margin:4px 0 10px;color:var(--mut)"><a href="lab05_gradient.html" style="color:var(--fg)">← 5. Градиентный спуск</a><a href="../index.html" style="color:var(--fg)">☰ Все лаборатории</a><a href="lab07_tree.html" style="color:var(--fg)">7. Решающие деревья →</a></nav>
+<script>
+const $=id=>document.getElementById(id);
+const cv=$('cv'),cx=cv.getContext('2d'),ac=$('ac'),ax=ac.getContext('2d');
+const CN=['Спорт','Политика','Кухня'],CC=['--A','--B','--C'],CEN=[[.75,.25],[.25,.75],[.72,.72]],KM=25,G=56;
+let seed=5,pts=[],k=5,metric='e',wt='u',q={x:.45,y:.55},showReg=true,curve=null,reg=null,drag=false,W=400;
+const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
+const gs=()=>Math.sqrt(-2*Math.log(rnd()+1e-9))*Math.cos(2*Math.PI*rnd());
+const cl=v=>Math.max(.02,Math.min(.98,v));
+const col=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const rgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+function gen(){pts=[];CEN.forEach((c,ci)=>{for(let i=0;i<40;i++){let x=c[0]+.12*gs(),y=c[1]+.12*gs();if(i<3){x*=.3;y*=.3}pts.push({x:cl(x),y:cl(y),c:ci})}});curve=reg=null}
+function noise(){for(let i=0;i<10;i++)pts.push({x:cl(rnd()),y:cl(rnd()),c:Math.floor(rnd()*3)});curve=reg=null}
+function dist(a,b){if(metric=='e')return Math.hypot(a.x-b.x,a.y-b.y);
+ return 1-(a.x*b.x+a.y*b.y)/(Math.hypot(a.x,a.y)*Math.hypot(b.x,b.y)+1e-9)}
+const wgt=d=>wt=='u'?1:1/(d+1e-6);
+const sorted=(p,skip)=>{const a=[];pts.forEach((o,i)=>{if(i!=skip)a.push([dist(p,o),i])});return a.sort((u,v)=>u[0]-v[0])};
+const arg=v=>v.indexOf(Math.max(...v));
+function predict(p,K){const nn=sorted(p,-1).slice(0,K),v=[0,0,0];nn.forEach(([d,i])=>v[pts[i].c]+=wgt(d));return{nn,v,c:arg(v)}}
+function calcCurve(){const tr=Array(KM).fill(0),lo=Array(KM).fill(0);
+ pts.forEach((p,i)=>{[[sorted(p,-1),tr],[sorted(p,i),lo]].forEach(([s,acc])=>{const v=[0,0,0];
+  for(let j=0;j<KM;j++){v[pts[s[j][1]].c]+=wgt(s[j][0]);if(arg(v)==p.c)acc[j]++}})});
+ curve={tr:tr.map(x=>x/pts.length),lo:lo.map(x=>x/pts.length)}}
+function calcReg(){const c=document.createElement('canvas');c.width=c.height=G;const x=c.getContext('2d'),im=x.createImageData(G,G);
+ const cs=CC.map(n=>rgb(col(n)));
+ for(let j=0;j<G;j++)for(let i=0;i<G;i++){const r=predict({x:(i+.5)/G,y:1-(j+.5)/G},k);im.data.set([...cs[r.c],70],(j*G+i)*4)}
+ x.putImageData(im,0,0);reg=c}
+const X=x=>x*W,Y=y=>(1-y)*W;
+function draw(){if(!curve)calcCurve();if(showReg&&!reg)calcReg();
+ cx.clearRect(0,0,W,W);if(showReg){cx.imageSmoothingEnabled=false;cx.drawImage(reg,0,0,W,W)}
+ const r=predict(q,k),dk=r.nn[r.nn.length-1][0];
+ cx.strokeStyle=col('--fg');cx.lineWidth=1.2;cx.globalAlpha=.7;
+ r.nn.forEach(([d,i])=>{cx.beginPath();cx.moveTo(X(q.x),Y(q.y));cx.lineTo(X(pts[i].x),Y(pts[i].y));cx.stroke()});
+ cx.setLineDash([6,5]);
+ if(metric=='e'){cx.beginPath();cx.arc(X(q.x),Y(q.y),dk*W,0,7);cx.stroke()}
+ else{const a=Math.atan2(q.y,q.x),da=Math.acos(Math.max(-1,Math.min(1,1-dk)));
+  [a-da,a+da].forEach(t=>{cx.beginPath();cx.moveTo(X(0),Y(0));cx.lineTo(X(Math.cos(t)*2),Y(Math.sin(t)*2));cx.stroke()})}
+ cx.setLineDash([]);cx.globalAlpha=1;
+ const nset=new Set(r.nn.map(n=>n[1]));
+ pts.forEach((p,i)=>{cx.beginPath();cx.arc(X(p.x),Y(p.y),nset.has(i)?6:4.5,0,7);cx.fillStyle=col(CC[p.c]);cx.fill();
+  cx.strokeStyle=col('--bg');cx.lineWidth=nset.has(i)?2.5:1;cx.stroke()});
+ cx.beginPath();cx.moveTo(X(q.x),Y(q.y)-11);cx.lineTo(X(q.x)+10,Y(q.y));cx.lineTo(X(q.x),Y(q.y)+11);cx.lineTo(X(q.x)-10,Y(q.y));cx.closePath();
+ cx.fillStyle=col(CC[r.c]);cx.fill();cx.strokeStyle=col('--fg');cx.lineWidth=2.5;cx.stroke();
+ $('kv').textContent=k;$('pr').textContent='Предсказание для ★: '+CN[r.c];
+ const tot=r.v.reduce((a,b)=>a+b,0)||1;
+ $('vt').innerHTML=r.v.map((v,i)=>`<div class="bar"><span style="width:76px">${CN[i]}</span><i style="width:${v/tot*55}%;background:${col(CC[i])}"></i>${wt=='u'?v:(v/tot*100).toFixed(0)+'%'}</div>`).join('');
+ drawAcc()}
+function drawAcc(){const w=ac.clientWidth,h=w/2,lo=.5;ax.clearRect(0,0,w,h);
+ const xs=j=>14+j/(KM-1)*(w-24),ys=v=>h-12-Math.max(0,(v-lo)/(1-lo))*(h-22);
+ ax.strokeStyle=col('--bd');ax.strokeRect(.5,.5,w-1,h-1);ax.fillStyle=col('--mut');ax.font='11px system-ui';
+ ax.fillText('100%',3,12);ax.fillText('50%',3,h-14);ax.fillText('k →',w-26,h-2);
+ [[curve.tr,'--r'],[curve.lo,'--fg']].forEach(([a,c])=>{ax.beginPath();ax.strokeStyle=col(c);ax.lineWidth=2;
+  a.forEach((v,j)=>j?ax.lineTo(xs(j),ys(v)):ax.moveTo(xs(j),ys(v)));ax.stroke()});
+ ax.strokeStyle=col('--fg');ax.setLineDash([4,4]);ax.beginPath();ax.moveTo(xs(k-1),4);ax.lineTo(xs(k-1),h-12);ax.stroke();ax.setLineDash([]);
+ const b=curve.lo.indexOf(Math.max(...curve.lo));ax.fillStyle=col('--fg');ax.fillText('лучшее k = '+(b+1)+' ('+(curve.lo[b]*100).toFixed(0)+'%)',xs(Math.min(b,KM-12)),ys(curve.lo[b])-6)}
+function fit(){const d=devicePixelRatio||1;W=cv.clientWidth;
+ [[cv,cx],[ac,ax]].forEach(([c,x])=>{c.width=c.clientWidth*d;c.height=c.clientHeight*d;x.setTransform(d,0,0,d,0,0)});draw()}
+function setQ(e){const r=cv.getBoundingClientRect();q={x:Math.max(.01,Math.min(.99,(e.clientX-r.left)/r.width)),y:Math.max(.01,Math.min(.99,1-(e.clientY-r.top)/r.height))};draw()}
+cv.onpointerdown=e=>{drag=true;cv.setPointerCapture(e.pointerId);setQ(e)};
+cv.onpointermove=e=>{if(drag)setQ(e)};cv.onpointerup=()=>drag=false;
+const tog=(a,b,fn)=>{$(a).onclick=()=>{$(a).classList.add('on');$(b).classList.remove('on');fn();curve=reg=null;draw()}};
+tog('me','mc',()=>metric='e');tog('mc','me',()=>metric='c');tog('wu','wd',()=>wt='u');tog('wd','wu',()=>wt='d');
+$('k').oninput=e=>{k=+e.target.value;reg=null;draw()};
+$('rg').onclick=()=>{showReg=!showReg;$('rg').classList.toggle('on',showReg);draw()};
+$('nz').onclick=()=>{noise();draw()};$('nw').onclick=()=>{seed=Math.floor(Math.random()*1e6)+1;gen();draw()};
+addEventListener('resize',fit);gen();fit();
+</script></main></body></html>
