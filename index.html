@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Виртуальная лаборатория: классификация и кластеризация текстов</title>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--card:#f4f4f6;--bd:#d8d8de;--ac:#2b7de9;color-scheme:light dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root{--bg:#141416;--fg:#ececf0;--mut:#9a9aa3;--card:#1f1f23;--bd:#38383f;--ac:#5b9cf5}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:20px 16px 40px}h1{font-size:1.6rem;margin:.2em 0}h2{font-size:1.1rem;margin:1.6em 0 .6em;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+p.l{color:var(--mut);max-width:760px}.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.c{display:flex;gap:12px;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px}
+.n{flex:none;width:34px;height:34px;border-radius:50%;background:var(--ac);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+.b h3{margin:0 0 4px;font-size:1.02rem}.b p{margin:0 0 10px;color:var(--mut);font-size:.92rem}.r{display:flex;flex-wrap:wrap;gap:8px}
+.bt{padding:6px 11px;border-radius:8px;background:var(--ac);color:#fff;text-decoration:none;font-size:.9rem}.bt.s{background:transparent;color:var(--fg);border:1px solid var(--bd)}
+.how{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px 16px;margin-top:22px;color:var(--mut);font-size:.92rem}
+</style></head><body><main>
+<h1>Виртуальная лаборатория: классификация и кластеризация текстов</h1>
+<p class="l">Пятнадцать интерактивных лабораторий по темам курса для направления «Компьютерная лингвистика». В каждой анимация алгоритма, ползунки параметров, эксперименты и вопросы для самопроверки. К каждой теме есть практикум в Google Colab: тот же алгоритм на текстах с настоящим scikit-learn.</p>
+<p class="l"><b>Как работать:</b> сначала откройте лабораторию, поиграйте с параметрами и выполните эксперименты; затем повторите на данных в практикуме.</p>
+<h2>Основы и данные</h2><div class="g"><article class="c"><div class="n">1</div><div class="b"><h3>Классификация и кластеризация</h3><p>Чем отличаются задачи, метки против сходства; квиз «что это за задача?»</p>
+<div class="r"><a class="bt" href="labs/lab01_basics.html">Открыть лабораторию</a><a class="bt s colab" data-nb="01_basics" href="notebooks/01_basics.ipynb">Практикум в Colab</a></div></div></article><article class="c"><div class="n">2</div><div class="b"><h3>Подготовка наборов данных</h3><p>Train/val/test, стратификация, утечка данных, согласие разметчиков (κ Коэна)</p>
+<div class="r"><a class="bt" href="labs/lab02_datasets.html">Открыть лабораторию</a><a class="bt s colab" data-nb="02_datasets" href="notebooks/02_datasets.ipynb">Практикум в Colab</a></div></div></article><article class="c"><div class="n">3</div><div class="b"><h3>Multiclass и multilabel</h3><p>Softmax против независимых сигмоид, пороги меток, метрики для множественных меток</p>
+<div class="r"><a class="bt" href="labs/lab03_multi.html">Открыть лабораторию</a><a class="bt s colab" data-nb="03_multi" href="notebooks/03_multi.ipynb">Практикум в Colab</a></div></div></article></div>
+<h2>Линейные модели и оптимизация</h2><div class="g"><article class="c"><div class="n">4</div><div class="b"><h3>Линейные модели и границы</h3><p>SVM, логистическая регрессия и перцептрон учатся одновременно</p>
+<div class="r"><a class="bt" href="labs/lab04_linear.html">Открыть лабораторию</a><a class="bt s colab" data-nb="04_linear" href="notebooks/04_linear.ipynb">Практикум в Colab</a></div></div></article><article class="c"><div class="n">5</div><div class="b"><h3>Градиентный спуск</h3><p>Ландшафт потерь, GD, SGD, Momentum, скорость обучения</p>
+<div class="r"><a class="bt" href="labs/lab05_gradient.html">Открыть лабораторию</a><a class="bt s colab" data-nb="05_gradient" href="notebooks/05_gradient.ipynb">Практикум в Colab</a></div></div></article></div>
+<h2>Нелинейные методы и ансамбли</h2><div class="g"><article class="c"><div class="n">6</div><div class="b"><h3>Метод k ближайших соседей</h3><p>Выбор k, евклидово и косинусное расстояние, области решения</p>
+<div class="r"><a class="bt" href="labs/lab06_knn.html">Открыть лабораторию</a><a class="bt s colab" data-nb="06_knn" href="notebooks/06_knn.ipynb">Практикум в Colab</a></div></div></article><article class="c"><div class="n">7</div><div class="b"><h3>Решающие деревья</h3><p>Пошаговый рост, Gini и энтропия, график выигрыша от разреза, переобучение</p>
+<div class="r"><a class="bt" href="labs/lab07_tree.html">Открыть лабораторию</a><a class="bt s colab" data-nb="07_tree" href="notebooks/07_tree.ipynb">Практикум в Colab</a></div></div></article><article class="c"><div class="n">8</div><div class="b"><h3>Случайный лес</h3><p>Бутстрэп, голосование деревьев, OOB-оценка</p>
+<div class="r"><a class="bt" href="labs/lab08_forest.html">Открыть лабораторию</a><a class="bt s colab" data-nb="08_forest" href="notebooks/08_forest.ipynb">Практикум в Colab</a></div></div></article></div>
+<h2>Настройка и качество</h2><div class="g"><article class="c"><div class="n">9</div><div class="b"><h3>Подбор гиперпараметров</h3><p>Grid Search против Random Search на настоящей карте точности</p>
+<div class="r"><a class="bt" href="labs/lab09_hyperparams.html">Открыть лабораторию</a><a class="bt s colab" data-nb="09_hyperparams" href="notebooks/09_hyperparams.ipynb">Практикум в Colab</a></div></div></article><article class="c"><div class="n">10</div><div class="b"><h3>Дисбаланс классов</h3><p>Веса классов, SMOTE, undersampling, порог, парадокс точности</p>
+<div class="r"><a class="bt" href="labs/lab10_imbalance.html">Открыть лабораторию</a><a class="bt s colab" data-nb="10_imbalance" href="notebooks/10_imbalance.ipynb">Практикум в Colab</a></div></div></article></div>
+<h2>Кластеризация</h2><div class="g"><article class="c"><div class="n">11</div><div class="b"><h3>Расстояния, сходство, центроид</h3><p>Косинус и евклид, TF-IDF на русских предложениях, центроид и выбросы</p>
+<div class="r"><a class="bt" href="labs/lab11_distance.html">Открыть лабораторию</a><a class="bt s colab" data-nb="11_distances" href="notebooks/11_distances.ipynb">Практикум в Colab</a></div></div></article><article class="c"><div class="n">12</div><div class="b"><h3>Алгоритм K-Means</h3><p>Пошаговая анимация, k-means++, метод локтя, локальные минимумы</p>
+<div class="r"><a class="bt" href="labs/lab12_kmeans.html">Открыть лабораторию</a><a class="bt s colab" data-nb="12_kmeans" href="notebooks/12_kmeans.ipynb">Практикум в Colab</a></div></div></article><article class="c"><div class="n">13</div><div class="b"><h3>Иерархическая кластеризация и DBSCAN</h3><p>Дендрограмма, виды связи, ядра, краевые точки и шум</p>
+<div class="r"><a class="bt" href="labs/lab13_hier_dbscan.html">Открыть лабораторию</a><a class="bt s colab" data-nb="13_hier_dbscan" href="notebooks/13_hier_dbscan.ipynb">Практикум в Colab</a></div></div></article><article class="c"><div class="n">14</div><div class="b"><h3>Оценка качества кластеризации</h3><p>Силуэт, Дэвис–Болдин, Калински–Харабас, выбор числа кластеров</p>
+<div class="r"><a class="bt" href="labs/lab14_quality.html">Открыть лабораторию</a><a class="bt s colab" data-nb="14_quality" href="notebooks/14_quality.ipynb">Практикум в Colab</a></div></div></article></div>
+<h2>Тематическое моделирование</h2><div class="g"><article class="c"><div class="n">15</div><div class="b"><h3>Тематическое моделирование (LDA)</h3><p>Настоящий LDA по Гиббсу: темы, доли тем в документах</p>
+<div class="r"><a class="bt" href="labs/lab15_lda.html">Открыть лабораторию</a><a class="bt s colab" data-nb="15_lda" href="notebooks/15_lda.ipynb">Практикум в Colab</a></div></div></article></div>
+<div class="how" id="how">Лаборатории работают прямо в браузере, без установки и без интернета (после загрузки страницы).</div>
+</main>
+<script>
+(function(){var h=location.hostname,p=location.pathname.split('/').filter(Boolean),how=document.getElementById('how');
+ if(/\.github\.io$/.test(h)&&p.length){var u=h.split('.')[0],r=p[0];
+  document.querySelectorAll('.colab').forEach(function(a){a.href='https://colab.research.google.com/github/'+u+'/'+r+'/blob/main/notebooks/'+a.dataset.nb+'.ipynb';a.target='_blank';a.rel='noopener'});
+ }else{how.innerHTML+='<br>Ссылки на Colab появятся автоматически, когда страница будет опубликована на GitHub Pages. Локально ноутбуки открываются из папки <code>notebooks/</code>.'}})();
+</script></body></html>
